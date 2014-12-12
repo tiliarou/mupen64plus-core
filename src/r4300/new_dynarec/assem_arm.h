@@ -39,7 +39,7 @@
 // Thus the local variables are actually global and not on the stack.
 
 extern char *invc_ptr;
-extern char extra_memory[33554432];
+extern char extra_memory[50331648]; //48MB
 
 #define BASE_ADDR ((int)(&extra_memory))
 //#define TARGET_SIZE_2 24 // 2^24 = 16 megabytes

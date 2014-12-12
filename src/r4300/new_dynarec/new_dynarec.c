@@ -7557,7 +7557,14 @@ void new_dynarec_init()
   DebugMessage(M64MSG_INFO, "Init new dynarec");
 
 #if NEW_DYNAREC == NEW_DYNAREC_ARM
-  if ((base_addr = mmap ((u_char *)BASE_ADDR, 1<<TARGET_SIZE_2,
+  int cache_addr;
+
+  if((BASE_ADDR&0xFF000000)==BASE_ADDR)
+	  cache_addr=BASE_ADDR;
+  else
+	  cache_addr=(BASE_ADDR&0xFF000000)+0x01000000;
+
+  if ((base_addr = mmap ((u_char*)cache_addr, 1<<TARGET_SIZE_2,
             PROT_READ | PROT_WRITE | PROT_EXEC,
             MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS,
             -1, 0)) <= 0) {DebugMessage(M64MSG_ERROR, "mmap() failed");}

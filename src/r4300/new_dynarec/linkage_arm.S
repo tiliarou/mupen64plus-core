@@ -99,10 +99,10 @@
 	.bss
 	.align	12
 	.type	extra_memory, %object
-	.size	extra_memory, 33554432
+	.size	extra_memory, 50331648
 extra_memory:
-	.space	33554432+64+16+16+8+8+8+8+256+8+8+128+128+128+16+8+132+4+256+512+4194304
-dynarec_local = extra_memory + 33554432
+	.space	50331648+64+16+16+8+8+8+8+256+8+8+128+128+128+16+8+132+4+256+512+4194304
+dynarec_local = extra_memory + 50331648
 	.type	dynarec_local, %object
 	.size	dynarec_local, 64
 next_interupt = dynarec_local + 64
