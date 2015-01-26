@@ -3634,17 +3634,16 @@ static void cop0_assemble(int i,struct regstat *i_regs)
       signed char t=get_reg(i_regs->regmap,rt1[i]);
       char copr=(source[i]>>11)&0x1f;
       if(t>=0) {
-        emit_writeword_imm((int)&fake_pc,(int)&PC);
-        emit_writebyte_imm((source[i]>>11)&0x1f,(int)&(fake_pc.f.r.nrd));
-        if(copr==9) {
+        if(copr==1)
+          emit_writeword_imm(1,(int)&stop);
+        else if(copr==9) {
           emit_readword((int)&last_count,ECX);
           emit_loadreg(CCREG,HOST_CCREG); // TODO: do proper reg alloc
           emit_add(HOST_CCREG,ECX,HOST_CCREG);
           emit_addimm(HOST_CCREG,CLOCK_DIVIDER*ccadj[i],HOST_CCREG);
           emit_writeword(HOST_CCREG,(int)&g_cp0_regs[CP0_COUNT_REG]);
         }
-        emit_call((int)cached_interpreter_table.MFC0);
-        emit_readword((int)&readmem_dword,t);
+        emit_readword((int)&g_cp0_regs[copr],t);
       }
     }
   }

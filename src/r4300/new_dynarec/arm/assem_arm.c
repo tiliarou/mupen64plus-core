@@ -3641,10 +3641,11 @@ static void cop0_assemble(int i,struct regstat *i_regs)
       signed char t=get_reg(i_regs->regmap,rt1[i]);
       char copr=(source[i]>>11)&0x1f;
       if(t>=0) {
-        emit_addimm(FP,(int)&fake_pc-(int)&dynarec_local,0);
-        emit_movimm((source[i]>>11)&0x1f,1);
-        emit_writeword(0,(int)&PC);
-        emit_writebyte(1,(int)&(fake_pc.f.r.nrd));
+        if(copr==1)
+        {
+          emit_movimm(1,0);
+          emit_writeword(0,(int)&stop);
+        }
         if(copr==9) {
           emit_readword((int)&last_count,ECX);
           emit_loadreg(CCREG,HOST_CCREG); // TODO: do proper reg alloc
@@ -3652,8 +3653,7 @@ static void cop0_assemble(int i,struct regstat *i_regs)
           emit_addimm(HOST_CCREG,CLOCK_DIVIDER*ccadj[i],HOST_CCREG);
           emit_writeword(HOST_CCREG,(int)&g_cp0_regs[CP0_COUNT_REG]);
         }
-        emit_call((int)cached_interpreter_table.MFC0);
-        emit_readword((int)&readmem_dword,t);
+        emit_readword((int)&g_cp0_regs[copr],t);
       }
     }
   }
