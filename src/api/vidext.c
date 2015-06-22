@@ -34,6 +34,10 @@
 #include "m64p_vidext.h"
 #include "vidext.h"
 
+#ifdef HAVE_EGL
+#include "egl_windows.h"
+#endif
+
 #if SDL_VERSION_ATLEAST(2,0,0)
     #ifndef USE_GLES
     static int l_ForceCompatibilityContext = 1;
@@ -128,6 +132,10 @@ EXPORT m64p_error CALL VidExt_Quit(void)
 
     if (!SDL_WasInit(SDL_INIT_VIDEO))
         return M64ERR_NOT_INIT;
+
+#ifdef HAVE_EGL
+    destroy_egl_windows();
+#endif
 
     SDL_ShowCursor(SDL_ENABLE);
 #if SDL_VERSION_ATLEAST(2,0,0)
@@ -245,7 +253,13 @@ EXPORT m64p_error CALL VidExt_SetVideoMode(int Width, int Height, int BitsPerPix
     else
         DebugMessage(M64MSG_INFO, "Setting video mode: %ix%i", Width, Height);
 
+#ifdef HAVE_EGL
+    l_pScreen = SDL_SetVideoMode(Width, Height, 16, SDL_HWSURFACE);
+    create_egl_windows();
+#else
     l_pScreen = SDL_SetVideoMode(Width, Height, BitsPerPixel, videoFlags);
+#endif
+
     if (l_pScreen == NULL)
     {
         DebugMessage(M64MSG_ERROR, "SDL_SetVideoMode failed: %s", SDL_GetError());
@@ -513,7 +527,11 @@ EXPORT m64p_error CALL VidExt_GL_SwapBuffers(void)
     if (!SDL_WasInit(SDL_INIT_VIDEO))
         return M64ERR_NOT_INIT;
 
+#ifdef HAVE_EGL
+    egl_swap_buffers();
+#else
     SDL_GL_SwapBuffers();
+#endif
     return M64ERR_SUCCESS;
 }
 
