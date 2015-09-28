@@ -2845,12 +2845,12 @@ static void emit_extjump2(int addr, int target, int linker)
   //assert((target>=0x80000000&&target<0x80800000)||(target>0xA4000000&&target<0xA4001000));
 //DEBUG >
 #ifdef DEBUG_CYCLE_COUNT
-  emit_readword((int)&last_count,ECX);
-  emit_add(HOST_CCREG,ECX,HOST_CCREG);
-  emit_readword((int)&next_interupt,ECX);
+  emit_readword((int)&last_count,HOST_TEMPREG);
+  emit_add(HOST_CCREG,HOST_TEMPREG,HOST_CCREG);
+  emit_readword((int)&next_interupt,HOST_TEMPREG);
   emit_writeword(HOST_CCREG,(int)&g_cp0_regs[CP0_COUNT_REG]);
-  emit_sub(HOST_CCREG,ECX,HOST_CCREG);
-  emit_writeword(ECX,(int)&last_count);
+  emit_sub(HOST_CCREG,HOST_TEMPREG,HOST_CCREG);
+  emit_writeword(HOST_TEMPREG,(int)&last_count);
 #endif
 //DEBUG <
   emit_call(linker);
@@ -3273,7 +3273,7 @@ static void do_cop1stub(int n)
   //else {DebugMessage(M64MSG_ERROR, "fp exception in delay slot");}
   wb_dirtys(i_regs->regmap_entry,i_regs->was32,i_regs->wasdirty);
   if(regs[i].regmap_entry[HOST_CCREG]!=CCREG) emit_loadreg(CCREG,HOST_CCREG);
-  emit_movimm(start+(i-ds)*4,EAX); // Get PC
+  emit_movimm(start+(i-ds)*4,0); // Get PC
   emit_addimm(HOST_CCREG,CLOCK_DIVIDER*ccadj[i],HOST_CCREG); // CHECK: is this right?  There should probably be an extra cycle...
   emit_jmp(ds?(int)fp_exception_ds:(int)fp_exception);
 }
@@ -3646,9 +3646,9 @@ static void cop0_assemble(int i,struct regstat *i_regs)
         emit_writeword(0,(int)&PC);
         emit_writebyte(1,(int)&(fake_pc.f.r.nrd));
         if(copr==9) {
-          emit_readword((int)&last_count,ECX);
+          emit_readword((int)&last_count,HOST_TEMPREG);
           emit_loadreg(CCREG,HOST_CCREG); // TODO: do proper reg alloc
-          emit_add(HOST_CCREG,ECX,HOST_CCREG);
+          emit_add(HOST_CCREG,HOST_TEMPREG,HOST_CCREG);
           emit_addimm(HOST_CCREG,CLOCK_DIVIDER*ccadj[i],HOST_CCREG);
           emit_writeword(HOST_CCREG,(int)&g_cp0_regs[CP0_COUNT_REG]);
         }
@@ -3669,9 +3669,9 @@ static void cop0_assemble(int i,struct regstat *i_regs)
     emit_writeword(0,(int)&PC);
     emit_writebyte(1,(int)&(fake_pc.f.r.nrd));
     if(copr==9||copr==11||copr==12) {
-      emit_readword((int)&last_count,ECX);
+      emit_readword((int)&last_count,HOST_TEMPREG);
       emit_loadreg(CCREG,HOST_CCREG); // TODO: do proper reg alloc
-      emit_add(HOST_CCREG,ECX,HOST_CCREG);
+      emit_add(HOST_CCREG,HOST_TEMPREG,HOST_CCREG);
       emit_addimm(HOST_CCREG,CLOCK_DIVIDER*ccadj[i],HOST_CCREG);
       emit_writeword(HOST_CCREG,(int)&g_cp0_regs[CP0_COUNT_REG]);
     }
@@ -3690,10 +3690,10 @@ static void cop0_assemble(int i,struct regstat *i_regs)
     emit_call((int)cached_interpreter_table.MTC0);
     if(copr==9||copr==11||copr==12) {
       emit_readword((int)&g_cp0_regs[CP0_COUNT_REG],HOST_CCREG);
-      emit_readword((int)&next_interupt,ECX);
+      emit_readword((int)&next_interupt,HOST_TEMPREG);
       emit_addimm(HOST_CCREG,-CLOCK_DIVIDER*ccadj[i],HOST_CCREG);
-      emit_sub(HOST_CCREG,ECX,HOST_CCREG);
-      emit_writeword(ECX,(int)&last_count);
+      emit_sub(HOST_CCREG,HOST_TEMPREG,HOST_CCREG);
+      emit_writeword(HOST_TEMPREG,(int)&last_count);
       emit_storereg(CCREG,HOST_CCREG);
     }
     if(copr==12) {
@@ -3719,9 +3719,9 @@ static void cop0_assemble(int i,struct regstat *i_regs)
     if((source[i]&0x3f)==0x06) { // TLBWR
       // The TLB entry written by TLBWR is dependent on the count,
       // so update the cycle count
-      emit_readword((int)&last_count,ECX);
+      emit_readword((int)&last_count,HOST_TEMPREG);
       if(i_regs->regmap[HOST_CCREG]!=CCREG) emit_loadreg(CCREG,HOST_CCREG);
-      emit_add(HOST_CCREG,ECX,HOST_CCREG);
+      emit_add(HOST_CCREG,HOST_TEMPREG,HOST_CCREG);
       emit_addimm(HOST_CCREG,CLOCK_DIVIDER*ccadj[i],HOST_CCREG);
       emit_writeword(HOST_CCREG,(int)&g_cp0_regs[CP0_COUNT_REG]);
       emit_call((int)TLBWR_new);
@@ -3768,17 +3768,15 @@ static void cop1_assemble(int i,struct regstat *i_regs)
   }
   else if (opcode2[i]==4) { // MTC1
     signed char sl=get_reg(i_regs->regmap,rs1[i]);
-    signed char temp=get_reg(i_regs->regmap,-1);
-    emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
-    emit_writeword_indexed(sl,0,temp);
+    emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],HOST_TEMPREG);
+    emit_writeword_indexed(sl,0,HOST_TEMPREG);
   }
   else if (opcode2[i]==5) { // DMTC1
     signed char sl=get_reg(i_regs->regmap,rs1[i]);
     signed char sh=rs1[i]>0?get_reg(i_regs->regmap,rs1[i]|64):sl;
-    signed char temp=get_reg(i_regs->regmap,-1);
-    emit_readword((int)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
-    emit_writeword_indexed(sh,4,temp);
-    emit_writeword_indexed(sl,0,temp);
+    emit_readword((int)&reg_cop1_double[(source[i]>>11)&0x1f],HOST_TEMPREG);
+    emit_writeword_indexed(sh,4,HOST_TEMPREG);
+    emit_writeword_indexed(sl,0,HOST_TEMPREG);
   }
   else if (opcode2[i]==2) // CFC1
   {
@@ -3808,8 +3806,6 @@ static void cop1_assemble(int i,struct regstat *i_regs)
 
 static void fconv_assemble_arm(int i,struct regstat *i_regs)
 {
-  signed char temp=get_reg(i_regs->regmap,-1);
-  assert(temp>=0);
   // Check cop1 unusable
   if(!cop1_usable) {
     signed char rs=get_reg(i_regs->regmap,CSREG);
@@ -3823,55 +3819,55 @@ static void fconv_assemble_arm(int i,struct regstat *i_regs)
   
   #if (defined(__VFP_FP__) && !defined(__SOFTFP__)) 
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0d) { // trunc_w_s
-    emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
-    emit_flds(temp,15);
+    emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],HOST_TEMPREG);
+    emit_flds(HOST_TEMPREG,15);
     emit_ftosizs(15,15); // float->int, truncate
     if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
-      emit_readword((int)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
-    emit_fsts(15,temp);
+      emit_readword((int)&reg_cop1_simple[(source[i]>>6)&0x1f],HOST_TEMPREG);
+    emit_fsts(15,HOST_TEMPREG);
     return;
   }
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0d) { // trunc_w_d
-    emit_readword((int)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
-    emit_vldr(temp,7);
+    emit_readword((int)&reg_cop1_double[(source[i]>>11)&0x1f],HOST_TEMPREG);
+    emit_vldr(HOST_TEMPREG,7);
     emit_ftosizd(7,13); // double->int, truncate
-    emit_readword((int)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
-    emit_fsts(13,temp);
+    emit_readword((int)&reg_cop1_simple[(source[i]>>6)&0x1f],HOST_TEMPREG);
+    emit_fsts(13,HOST_TEMPREG);
     return;
   }
   
   if(opcode2[i]==0x14&&(source[i]&0x3f)==0x20) { // cvt_s_w
-    emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
-    emit_flds(temp,13);
+    emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],HOST_TEMPREG);
+    emit_flds(HOST_TEMPREG,13);
     if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
-      emit_readword((int)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+      emit_readword((int)&reg_cop1_simple[(source[i]>>6)&0x1f],HOST_TEMPREG);
     emit_fsitos(13,15);
-    emit_fsts(15,temp);
+    emit_fsts(15,HOST_TEMPREG);
     return;
   }
   if(opcode2[i]==0x14&&(source[i]&0x3f)==0x21) { // cvt_d_w
-    emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
-    emit_flds(temp,13);
-    emit_readword((int)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],HOST_TEMPREG);
+    emit_flds(HOST_TEMPREG,13);
+    emit_readword((int)&reg_cop1_double[(source[i]>>6)&0x1f],HOST_TEMPREG);
     emit_fsitod(13,7);
-    emit_vstr(7,temp);
+    emit_vstr(7,HOST_TEMPREG);
     return;
   }
   
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x21) { // cvt_d_s
-    emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
-    emit_flds(temp,13);
-    emit_readword((int)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],HOST_TEMPREG);
+    emit_flds(HOST_TEMPREG,13);
+    emit_readword((int)&reg_cop1_double[(source[i]>>6)&0x1f],HOST_TEMPREG);
     emit_fcvtds(13,7);
-    emit_vstr(7,temp);
+    emit_vstr(7,HOST_TEMPREG);
     return;
   }
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x20) { // cvt_s_d
-    emit_readword((int)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
-    emit_vldr(temp,7);
-    emit_readword((int)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+    emit_readword((int)&reg_cop1_double[(source[i]>>11)&0x1f],HOST_TEMPREG);
+    emit_vldr(HOST_TEMPREG,7);
+    emit_readword((int)&reg_cop1_simple[(source[i]>>6)&0x1f],HOST_TEMPREG);
     emit_fcvtsd(7,13);
-    emit_fsts(13,temp);
+    emit_fsts(13,HOST_TEMPREG);
     return;
   }
   #endif
@@ -4026,8 +4022,6 @@ static void fconv_assemble_arm(int i,struct regstat *i_regs)
 static void fcomp_assemble(int i,struct regstat *i_regs)
 {
   signed char fs=get_reg(i_regs->regmap,FSREG);
-  signed char temp=get_reg(i_regs->regmap,-1);
-  assert(temp>=0);
   // Check cop1 unusable
   if(!cop1_usable) {
     signed char cs=get_reg(i_regs->regmap,CSREG);
@@ -4052,10 +4046,10 @@ static void fcomp_assemble(int i,struct regstat *i_regs)
   
   #if (defined(__VFP_FP__) && !defined(__SOFTFP__)) 
   if(opcode2[i]==0x10) {
-    emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
-    emit_readword((int)&reg_cop1_simple[(source[i]>>16)&0x1f],HOST_TEMPREG);
     emit_orimm(fs,0x800000,fs);
-    emit_flds(temp,14);
+    emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],HOST_TEMPREG);
+    emit_flds(HOST_TEMPREG,14);
+    emit_readword((int)&reg_cop1_simple[(source[i]>>16)&0x1f],HOST_TEMPREG);
     emit_flds(HOST_TEMPREG,15);
     emit_fcmps(14,15);
     emit_fmstat();
@@ -4075,10 +4069,10 @@ static void fcomp_assemble(int i,struct regstat *i_regs)
     return;
   }
   if(opcode2[i]==0x11) {
-    emit_readword((int)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
-    emit_readword((int)&reg_cop1_double[(source[i]>>16)&0x1f],HOST_TEMPREG);
     emit_orimm(fs,0x800000,fs);
-    emit_vldr(temp,6);
+    emit_readword((int)&reg_cop1_double[(source[i]>>11)&0x1f],HOST_TEMPREG);
+    emit_vldr(HOST_TEMPREG,6);
+    emit_readword((int)&reg_cop1_double[(source[i]>>16)&0x1f],HOST_TEMPREG);
     emit_vldr(HOST_TEMPREG,7);
     emit_fcmpd(6,7);
     emit_fmstat();

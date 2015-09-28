@@ -1886,7 +1886,6 @@ static void cop1_alloc(struct regstat *current,int i)
       current->is32|=1LL<<rt1[i];
     }
     dirty_reg(current,rt1[i]);
-    alloc_reg_temp(current,i,-1);
   }
   else if(opcode2[i]>3) // MTC1/DMTC1/CTC1
   {
@@ -1896,21 +1895,30 @@ static void cop1_alloc(struct regstat *current,int i)
         alloc_reg64(current,i,rs1[i]); // DMTC1
       else
         alloc_reg(current,i,rs1[i]); // MTC1/CTC1
-      alloc_reg_temp(current,i,-1);
     }
     else {
       current->u&=~1LL;
       alloc_reg(current,i,0);
-      alloc_reg_temp(current,i,-1);
     }
+#ifndef HOST_TEMPREG
+    alloc_reg_temp(current,i,-1);
+    minimum_free_regs[i]=1;
+#else
+    if(opcode2[i]==6) //CTC1
+    {
+      alloc_reg_temp(current,i,-1);
+      minimum_free_regs[i]=1;
+    }
+#endif
   }
-  minimum_free_regs[i]=1;
 }
 static void fconv_alloc(struct regstat *current,int i)
 {
   alloc_reg(current,i,CSREG); // Load status
+#ifndef HOST_TEMPREG
   alloc_reg_temp(current,i,-1);
   minimum_free_regs[i]=1;
+#endif
 }
 static void float_alloc(struct regstat *current,int i)
 {
@@ -1923,8 +1931,10 @@ static void fcomp_alloc(struct regstat *current,int i)
   alloc_reg(current,i,CSREG); // Load status
   alloc_reg(current,i,FSREG); // Load flags
   dirty_reg(current,FSREG); // Flag will be modified
+#ifndef HOST_TEMPREG
   alloc_reg_temp(current,i,-1);
   minimum_free_regs[i]=1;
+#endif
 }
 
 static void syscall_alloc(struct regstat *current,int i)
@@ -5080,17 +5090,12 @@ static void ujump_assemble(int i,struct regstat *i_regs)
     if(rt>=0) {
       #ifdef USE_MINI_HT
       if(internal_branch(branch_regs[i].is32,return_address)) {
-        int temp=rt+1;
-        if(temp==EXCLUDE_REG||temp>=HOST_REGS||
-           branch_regs[i].regmap[temp]>=0)
-        {
-          temp=get_reg(branch_regs[i].regmap,-1);
-        }
         #ifdef HOST_TEMPREG
-        if(temp<0) temp=HOST_TEMPREG;
+        do_miniht_insert(return_address,rt,HOST_TEMPREG);
+        #else
+        // x86 backend doesn't need a temp register for mini_ht insert
+        do_miniht_insert(return_address,rt,0);
         #endif
-        if(temp>=0) do_miniht_insert(return_address,rt,temp);
-        else emit_movimm(return_address,rt);
       }
       else
       #endif
