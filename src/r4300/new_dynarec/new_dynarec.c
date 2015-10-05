@@ -9313,6 +9313,27 @@ int new_recompile_block(int addr)
       regs[i].isconst=current.isconst;
       memcpy(constmap[i],current.constmap,sizeof(current.constmap));
     }
+    else
+    {
+      for(hr=0;hr<HOST_REGS;hr++)
+      {
+        int r=branch_regs[i-1].regmap[hr];
+        if(r<64){
+          if((branch_regs[i-1].u>>r)&1)
+          {
+            branch_regs[i-1].regmap[hr]=-1;
+            branch_regs[i-1].regmap_entry[hr]=-1;
+          }
+        }
+        else {
+          if((current.uu>>(r&63))&1)
+          {
+            branch_regs[i-1].regmap[hr]=-1;
+            branch_regs[i-1].regmap_entry[hr]=-1;
+          }
+        }
+      }
+    }
     for(hr=0;hr<HOST_REGS;hr++) {
       if(hr!=EXCLUDE_REG&&regs[i].regmap[hr]>=0) {
         if(regmap_pre[i][hr]!=regs[i].regmap[hr]) {
