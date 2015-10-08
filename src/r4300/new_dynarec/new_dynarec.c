@@ -1793,33 +1793,70 @@ void multdiv_alloc(struct regstat *current,int i)
   {
     if((opcode2[i]&4)==0) // 32-bit
     {
-      current->u&=~(1LL<<HIREG);
-      current->u&=~(1LL<<LOREG);
-      alloc_reg(current,i,HIREG);
-      alloc_reg(current,i,LOREG);
-      alloc_reg(current,i,rs1[i]);
-      alloc_reg(current,i,rs2[i]);
       current->is32|=1LL<<HIREG;
       current->is32|=1LL<<LOREG;
-      dirty_reg(current,HIREG);
-      dirty_reg(current,LOREG);
+
+      // Skip instruction
+      if(((current->u>>LOREG)&(current->u>>HIREG))&1)
+        return;
+      else
+      {
+        if(((current->u>>HIREG)&1)==0||(opcode2[i]&2))
+        {
+          // If we need the high part, must calculate both
+          // Always allocate the high and low part for division
+          current->u&=~(1LL<<HIREG);
+          current->u&=~(1LL<<LOREG);
+          alloc_reg(current,i,HIREG);
+          alloc_reg(current,i,LOREG);
+          dirty_reg(current,HIREG);
+          dirty_reg(current,LOREG);
+        }
+        else
+        {
+          alloc_reg(current,i,LOREG);
+          dirty_reg(current,LOREG);
+        }
+        alloc_reg(current,i,rs1[i]);
+        alloc_reg(current,i,rs2[i]);
+      }
     }
     else // 64-bit
     {
-      current->u&=~(1LL<<HIREG);
-      current->u&=~(1LL<<LOREG);
-      current->uu&=~(1LL<<HIREG);
-      current->uu&=~(1LL<<LOREG);
-      alloc_reg64(current,i,HIREG);
-      //if(HOST_REGS>10) alloc_reg64(current,i,LOREG);
-      alloc_reg64(current,i,rs1[i]);
-      alloc_reg64(current,i,rs2[i]);
-      alloc_all(current,i);
       current->is32&=~(1LL<<HIREG);
       current->is32&=~(1LL<<LOREG);
-      dirty_reg(current,HIREG);
-      dirty_reg(current,LOREG);
-      minimum_free_regs[i]=HOST_REGS;
+
+      // Skip instruction
+      if(((current->u>>LOREG)&(current->u>>HIREG)&(current->uu>>LOREG)&(current->uu>>HIREG))&1)
+        return;
+      else
+      {
+        if(((current->u>>HIREG)&1)==0||((current->uu>>HIREG)&1)==0||(opcode2[i]&2))
+        {
+          // If we need the high part, must calculate both
+          // Always allocate the high and low part for division
+          current->u&=~(1LL<<HIREG);
+          current->u&=~(1LL<<LOREG);
+          current->uu&=~(1LL<<HIREG);
+          current->uu&=~(1LL<<LOREG);
+          alloc_reg64(current,i,HIREG);
+          alloc_reg64(current,i,LOREG);
+          if(!(opcode2[i]&2))
+          {
+            dirty_reg(current,HIREG);
+            dirty_reg(current,LOREG);
+          }
+        }
+        else
+        {
+          current->u&=~(1LL<<LOREG);
+          current->uu&=~(1LL<<LOREG);
+          alloc_reg64(current,i,LOREG);
+          dirty_reg(current,LOREG);
+        }
+        alloc_reg64(current,i,rs1[i]);
+        alloc_reg64(current,i,rs2[i]);
+      }
     }
   }
   else
