@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
- *   Mupen64plus - new_dynarec.c                                           *
+ *   Mupen64plus - new_dynarec_arm64.c                                     *
  *   Copyright (C) 2009-2011 Ari64                                         *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -2771,6 +2771,7 @@ static void load_assemble(int i,struct regstat *i_regs)
   if(!using_tlb) {
     if(!c) {
       #ifdef RAM_OFFSET
+      assert(0); // ARM64: ROREG register is 64bit
       map=get_reg(i_regs->regmap,ROREG);
       if(map<0) emit_loadreg(ROREG,map=HOST_TEMPREG);
       #endif
@@ -3042,6 +3043,7 @@ static void store_assemble(int i,struct regstat *i_regs)
   else addr=s;
   if(!using_tlb) {
     #ifdef RAM_OFFSET
+    assert(0); // ARM64: ROREG register is 64bit
     map=get_reg(i_regs->regmap,ROREG);
     if(map<0) emit_loadreg(ROREG,map=HOST_TEMPREG);
     #endif
@@ -3138,6 +3140,7 @@ static void store_assemble(int i,struct regstat *i_regs)
       addr=temp;
       #endif
       #if defined(HOST_IMM8)
+      assert(0); // ARM64: INVCP register is 64bit
       int ir=get_reg(i_regs->regmap,INVCP);
       assert(ir>=0);
       emit_cmpmem_indexedsr12_reg(ir,addr,1);
@@ -3145,6 +3148,7 @@ static void store_assemble(int i,struct regstat *i_regs)
       emit_cmpmem_indexedsr12_imm((int)invalid_code,addr,1);
       #endif
       #if defined(HAVE_CONDITIONAL_CALL) && !defined(DESTRUCTIVE_SHIFT)
+      assert(0); // ARM64: No conditional call but no destructive shift either
       emit_callne(invalidate_addr_reg[addr]);
       #else
       jaddr2=(int)out;
@@ -3244,6 +3248,7 @@ static void storelr_assemble(int i,struct regstat *i_regs)
       }
     }
     #ifdef RAM_OFFSET
+    assert(0); // ARM64: ROREG register is 64bit
     int map=get_reg(i_regs->regmap,ROREG);
     if(map<0) emit_loadreg(ROREG,map=HOST_TEMPREG);
     gen_tlb_addr_w(temp,map);
@@ -3406,6 +3411,7 @@ static void storelr_assemble(int i,struct regstat *i_regs)
     add_stub(STORELR_STUB,jaddr,(int)out,0,(int)i_regs,rs2[i],ccadj[i],reglist);
   if(!using_tlb) {
     #ifdef RAM_OFFSET
+    assert(0); // ARM64: ROREG register is 64bit
     int map=get_reg(i_regs->regmap,ROREG);
     if(map<0) map=HOST_TEMPREG;
     gen_orig_addr_w(temp,map);
@@ -3413,6 +3419,7 @@ static void storelr_assemble(int i,struct regstat *i_regs)
     emit_addimm_no_flags((u_int)0x80000000-(u_int)g_rdram,temp);
     #endif
     #if defined(HOST_IMM8)
+    assert(0); // ARM64: INVCP register is 64bit
     int ir=get_reg(i_regs->regmap,INVCP);
     assert(ir>=0);
     emit_cmpmem_indexedsr12_reg(ir,temp,1);
@@ -3420,6 +3427,7 @@ static void storelr_assemble(int i,struct regstat *i_regs)
     emit_cmpmem_indexedsr12_imm((int)invalid_code,temp,1);
     #endif
     #if defined(HAVE_CONDITIONAL_CALL) && !defined(DESTRUCTIVE_SHIFT)
+    assert(0); // ARM64: No conditional call but no destructive shift either
     emit_callne(invalidate_addr_reg[temp]);
     #else
     jaddr2=(int)out;
@@ -3498,6 +3506,7 @@ static void c1ls_assemble(int i,struct regstat *i_regs)
     #ifdef RAM_OFFSET
     if (!c||opcode[i]==0x39||opcode[i]==0x3D) // SWC1/SDC1
     {
+      assert(0); // ARM64: ROREG register is 64bit
       map=get_reg(i_regs->regmap,ROREG);
       if(map<0) emit_loadreg(ROREG,map=HOST_TEMPREG);
     }
@@ -3595,6 +3604,7 @@ static void c1ls_assemble(int i,struct regstat *i_regs)
       temp=offset||c||s<0?ar:s;
       #endif
       #if defined(HOST_IMM8)
+      assert(0); // ARM64: INVCP register is 64bit
       int ir=get_reg(i_regs->regmap,INVCP);
       assert(ir>=0);
       emit_cmpmem_indexedsr12_reg(ir,temp,1);
@@ -3602,6 +3612,7 @@ static void c1ls_assemble(int i,struct regstat *i_regs)
       emit_cmpmem_indexedsr12_imm((int)invalid_code,temp,1);
       #endif
       #if defined(HAVE_CONDITIONAL_CALL) && !defined(DESTRUCTIVE_SHIFT)
+      assert(0); // ARM64: No conditional call but no destructive shift either
       emit_callne(invalidate_addr_reg[temp]);
       #else
       jaddr3=(int)out;
@@ -3796,6 +3807,9 @@ static void wb_invalidate(signed char pre[],signed char entry[],uint64_t dirty,u
         if(pre[hr]>=0&&(pre[hr]&63)<TEMPREG) {
           int nr;
           if((nr=get_reg(entry,pre[hr]))>=0) {
+            assert(pre[hr]!=INVCP);
+            assert(pre[hr]!=MMREG);
+            assert(pre[hr]!=ROREG);
             emit_mov(hr,nr);
           }
         }
@@ -3956,16 +3970,18 @@ static void address_generation(int i,struct regstat *i_regs,signed char entry[])
           if(!entry||entry[ra]!=agr) {
             if (opcode[i]==0x22||opcode[i]==0x26) { // LWL/LWR
               #ifdef RAM_OFFSET
-              if((signed int)constmap[i][rs]+offset<(signed int)0x80800000) 
+              if((signed int)constmap[i][rs]+offset<(signed int)0x80800000) {
+                assert(0);
                 emit_movimm(((constmap[i][rs]+offset)&0xFFFFFFFC)+(int)g_rdram-0x80000000,ra);
-              else
+              }else
               #endif
               emit_movimm((constmap[i][rs]+offset)&0xFFFFFFFC,ra);
             }else if (opcode[i]==0x1a||opcode[i]==0x1b) { // LDL/LDR
               #ifdef RAM_OFFSET
-              if((signed int)constmap[i][rs]+offset<(signed int)0x80800000) 
+              if((signed int)constmap[i][rs] + offset<(signed int)0x80800000) {
+                assert(0);
                 emit_movimm(((constmap[i][rs]+offset)&0xFFFFFFF8)+(int)g_rdram-0x80000000,ra);
-              else
+              }else
               #endif
               emit_movimm((constmap[i][rs]+offset)&0xFFFFFFF8,ra);
             }else{
@@ -3974,9 +3990,10 @@ static void address_generation(int i,struct regstat *i_regs,signed char entry[])
                  (using_tlb&&((signed int)constmap[i][rs]+offset)>=(signed int)0xC0000000))
               #endif
               #ifdef RAM_OFFSET
-              if((itype[i]==LOAD||opcode[i]==0x31||opcode[i]==0x35)&&(signed int)constmap[i][rs]+offset<(signed int)0x80800000) 
+              if((itype[i]==LOAD||opcode[i]==0x31||opcode[i]==0x35)&&(signed int)constmap[i][rs]+offset<(signed int)0x80800000) {
+                assert(0);
                 emit_movimm(constmap[i][rs]+offset+(int)g_rdram-0x80000000,ra);
-              else
+              }else
               #endif
               emit_movimm(constmap[i][rs]+offset,ra);
             }
@@ -4030,16 +4047,18 @@ static void address_generation(int i,struct regstat *i_regs,signed char entry[])
       if(c&&(rs1[i+1]!=rt1[i+1]||itype[i+1]!=LOAD)) {
         if (opcode[i+1]==0x22||opcode[i+1]==0x26) { // LWL/LWR
           #ifdef RAM_OFFSET
-          if((signed int)constmap[i+1][rs]+offset<(signed int)0x80800000) 
+          if((signed int)constmap[i+1][rs]+offset<(signed int)0x80800000) {
+            assert(0);
             emit_movimm(((constmap[i+1][rs]+offset)&0xFFFFFFFC)+(int)g_rdram-0x80000000,ra);
-          else
+          }else
           #endif
           emit_movimm((constmap[i+1][rs]+offset)&0xFFFFFFFC,ra);
         }else if (opcode[i+1]==0x1a||opcode[i+1]==0x1b) { // LDL/LDR
           #ifdef RAM_OFFSET
-          if((signed int)constmap[i+1][rs]+offset<(signed int)0x80800000) 
+          if((signed int)constmap[i+1][rs]+offset<(signed int)0x80800000) {
+            assert(0);
             emit_movimm(((constmap[i+1][rs]+offset)&0xFFFFFFF8)+(int)g_rdram-0x80000000,ra);
-          else
+          }else
           #endif
           emit_movimm((constmap[i+1][rs]+offset)&0xFFFFFFF8,ra);
         }else{
@@ -4048,9 +4067,10 @@ static void address_generation(int i,struct regstat *i_regs,signed char entry[])
              (using_tlb&&((signed int)constmap[i+1][rs]+offset)>=(signed int)0xC0000000))
           #endif
           #ifdef RAM_OFFSET
-          if((itype[i+1]==LOAD||opcode[i+1]==0x31||opcode[i+1]==0x35)&&(signed int)constmap[i+1][rs]+offset<(signed int)0x80800000) 
+          if((itype[i+1]==LOAD||opcode[i+1]==0x31||opcode[i+1]==0x35)&&(signed int)constmap[i+1][rs]+offset<(signed int)0x80800000) {
+            assert(0);
             emit_movimm(constmap[i+1][rs]+offset+(int)g_rdram-0x80000000,ra);
-          else
+          }else
           #endif
           emit_movimm(constmap[i+1][rs]+offset,ra);
         }
@@ -4092,9 +4112,10 @@ static int get_final_value(int hr, int i, int *value)
           if(!using_tlb||((signed int)constmap[i][hr]+imm[i+2])<(signed int)0xC0000000) return 0;
           #endif
           #ifdef RAM_OFFSET
-          if((signed int)constmap[i][hr]+imm[i+2]<(signed int)0x80800000)
+          if((signed int)constmap[i][hr]+imm[i+2]<(signed int)0x80800000){
+            assert(0);
             *value=constmap[i][hr]+imm[i+2]+(int)g_rdram-0x80000000;
-          else
+          }else
           #endif
           // Precompute load address
           *value=constmap[i][hr]+imm[i+2];
@@ -4107,9 +4128,10 @@ static int get_final_value(int hr, int i, int *value)
         if(!using_tlb||((signed int)constmap[i][hr]+imm[i+1])<(signed int)0xC0000000) return 0;
         #endif
         #ifdef RAM_OFFSET
-        if((signed int)constmap[i][hr]+imm[i+1]<(signed int)0x80800000)
+        if((signed int)constmap[i][hr]+imm[i+1]<(signed int)0x80800000){
+          assert(0);
           *value=constmap[i][hr]+imm[i+1]+(int)g_rdram-0x80000000;
-        else
+        }else
         #endif
         // Precompute load address
         *value=constmap[i][hr]+imm[i+1];
@@ -4140,6 +4162,7 @@ static void load_consts(signed char pre[],signed char regmap[],int is32,int i)
         if(((regs[i].isconst>>hr)&1)&&regmap[hr]<64&&regmap[hr]>0) {
           int value;
           if(get_final_value(hr,i,&value)) {
+            assert(0);
             if(value==0) {
               emit_zeroreg(hr);
             }

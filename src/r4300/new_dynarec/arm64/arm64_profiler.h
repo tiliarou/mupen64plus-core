@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
- *   Mupen64plus - arm_profiler.h                                          *
+ *   Mupen64plus - arm64_profiler.h                                        *
  *   Copyright (C) 2009-2011 Ari64                                         *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -18,8 +18,8 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.          *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-#ifndef M64P_R4300_ARM_PROFILER_H
-#define M64P_R4300_ARM_PROFILER_H
+#ifndef M64P_R4300_ARM64_PROFILER_H
+#define M64P_R4300_ARM64_PROFILER_H
 
 #ifdef NEW_DYNAREC_PROFILER
 #ifndef PROFILER
@@ -29,11 +29,20 @@ void profiler_block(int addr);
 #else
 
 #include <capstone.h>
-#define ARCHITECTURE CS_ARCH_ARM
+#define ARCHITECTURE CS_ARCH_ARM64
 #define MODE CS_MODE_LITTLE_ENDIAN
-#define INSTRUCTION insn[i].detail->arm
-#define FP_REGISTER 0x4d
-#define CALL_INST 0xd
+#define INSTRUCTION insn[i].detail->arm64
+#define FP_REGISTER 0x1
+#define CALL_INST 0x15
+
+#undef assert
+#define assert(A)                                                                               \
+  do{                                                                                           \
+    if((A)==0) {                                                                                \
+      __debugbreak();                                                                           \
+    }                                                                                           \
+  }                                                                                             \
+  while(0)
 
 /* Abstract non-static variables */
 #define base_addr                          profiler_base_addr
@@ -62,7 +71,7 @@ void profiler_block(int addr);
 static char invalid_code[0x100000];
 /* TODO: Any others? */
 
-/* Abstract linkage_arm.S */
+/* Abstract linkage_arm64.S */
 typedef struct
 {
   char extra_memory[33554432];
@@ -73,7 +82,7 @@ typedef struct
   int pending_exception;
   int pcaddr;
   int stop;
-  char *invc_ptr;
+  uint64_t invc_ptr; //char *invc_ptr;
   uint32_t address;
   uint64_t readmem_dword;
   uint64_t cpu_dword;
@@ -86,16 +95,16 @@ typedef struct
   int64_t hi;
   int64_t lo;
   unsigned int g_cp0_regs[CP0_REGS_COUNT];
-  float *reg_cop1_simple[32];
-  double *reg_cop1_double[32];
+  uint64_t reg_cop1_simple[32]; //float *reg_cop1_simple[32];
+  uint64_t reg_cop1_double[32]; //double *reg_cop1_double[32];
   u_int rounding_modes[4];
   int branch_target;
-  uint32_t PC;
+  uint64_t PC; //precomp_instr * PC;
   precomp_instr fake_pc;
-  int ram_offset;
+  uint64_t ram_offset;
   u_int mini_ht[32][2];
   u_char restore_candidate[512];
-  u_int memory_map[1048576];
+  uint64_t memory_map[1048576];
 }profiler_t;
 
 ALIGN(4096, static profiler_t profiler);
@@ -231,12 +240,7 @@ static void write_rdramb_new(void){}
 static void write_rdramh_new(void){}
 static void write_rdramd_new(void){}
 static void __clear_cache(char* begin, char *end){}
-
-/* Abstract arm_cpu_features.c */
-static arm_cpu_features_t arm_cpu_features;
-static void detect_arm_cpu_features(void){}
-static void print_arm_cpu_features(void){}
 #endif
 #endif
 
-#endif /* M64P_R4300_ARM_PROFILER_H */
+#endif /* M64P_R4300_ARM64_PROFILER_H */

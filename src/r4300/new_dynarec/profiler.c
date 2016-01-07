@@ -23,7 +23,7 @@
 #define NEW_DYNAREC NEW_DYNAREC_PROFILER
 #define PROFILER
 
-#include "new_dynarec.c"
+#include "new_dynarec_arm64.c"
 
 typedef struct{
   uintptr_t addr;
