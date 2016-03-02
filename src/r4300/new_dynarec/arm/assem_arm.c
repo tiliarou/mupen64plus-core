@@ -18,45 +18,14 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.          *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-#include "../../cp0_private.h"
-#include "main/main.h"
-
-void *dynamic_linker(void * src, u_int vaddr);
-void *dynamic_linker_ds(void * src, u_int vaddr);
-
-extern int cycle_count;
-extern int last_count;
-extern int pcaddr;
-extern int pending_exception;
-extern int branch_target;
-extern int ram_offset;
-extern uint64_t readmem_dword;
-extern precomp_instr fake_pc;
-extern void *dynarec_local;
-extern u_int memory_map[1048576];
-extern u_int mini_ht[32][2];
-extern u_int rounding_modes[4];
+static void *dynamic_linker(void * src, u_int vaddr);
+static void *dynamic_linker_ds(void * src, u_int vaddr);
+static void invalidate_addr(u_int addr);
 
 static u_int literals[1024][2];
+static unsigned int needs_clear_cache[1<<(TARGET_SIZE_2-17)];
 
-void indirect_jump_indexed();
-void indirect_jump();
-void do_interrupt();
-void jump_vaddr();
-void jump_vaddr_r0();
-void jump_vaddr_r1();
-void jump_vaddr_r2();
-void jump_vaddr_r3();
-void jump_vaddr_r4();
-void jump_vaddr_r5();
-void jump_vaddr_r6();
-void jump_vaddr_r7();
-void jump_vaddr_r8();
-void jump_vaddr_r9();
-void jump_vaddr_r10();
-void jump_vaddr_r12();
-
-const u_int jump_vaddr_reg[16] = {
+static const u_int jump_vaddr_reg[16] = {
   (int)jump_vaddr_r0,
   (int)jump_vaddr_r1,
   (int)jump_vaddr_r2,
@@ -74,20 +43,7 @@ const u_int jump_vaddr_reg[16] = {
   0,
   0};
 
-void invalidate_addr_r0();
-void invalidate_addr_r1();
-void invalidate_addr_r2();
-void invalidate_addr_r3();
-void invalidate_addr_r4();
-void invalidate_addr_r5();
-void invalidate_addr_r6();
-void invalidate_addr_r7();
-void invalidate_addr_r8();
-void invalidate_addr_r9();
-void invalidate_addr_r10();
-void invalidate_addr_r12();
-
-const u_int invalidate_addr_reg[16] = {
+static const u_int invalidate_addr_reg[16] = {
   (int)invalidate_addr_r0,
   (int)invalidate_addr_r1,
   (int)invalidate_addr_r2,
@@ -104,8 +60,6 @@ const u_int invalidate_addr_reg[16] = {
   0,
   0,
   0};
-
-#include "../../fpu.h"
 
 static u_int jump_table_symbols[] = {
   (int)invalidate_addr,
@@ -153,8 +107,6 @@ static u_int jump_table_symbols[] = {
   (int)invalidate_addr_r9,
   (int)invalidate_addr_r10,
   (int)invalidate_addr_r12,
-  (int)mult64,
-  (int)multu64,
   (int)div64,
   (int)divu64,
   (int)cvt_s_w,
@@ -233,12 +185,7 @@ static u_int jump_table_symbols[] = {
   (int)neg_d
 };
 
-static unsigned int needs_clear_cache[1<<(TARGET_SIZE_2-17)];
-
-#define JUMP_TABLE_SIZE (sizeof(jump_table_symbols)*2)
-
 /* Linker */
-
 static void set_jump_target(int addr,u_int target)
 {
   u_char *ptr=(u_char *)addr;
@@ -305,8 +252,7 @@ static void set_jump_target_fillslot(int addr,u_int target,int copy)
 }
 */
 
-
-void *dynamic_linker(void * src, u_int vaddr)
+static void *dynamic_linker(void * src, u_int vaddr)
 {
   u_int page=(vaddr^0x80000000)>>12;
   u_int vpage=page;
@@ -396,7 +342,7 @@ void *dynamic_linker(void * src, u_int vaddr)
   return get_addr_ht(0x80000000);
 }
 
-void *dynamic_linker_ds(void * src, u_int vaddr)
+static void *dynamic_linker_ds(void * src, u_int vaddr)
 {
   u_int page=(vaddr^0x80000000)>>12;
   u_int vpage=page;
@@ -503,8 +449,8 @@ static void *kill_pointer(void *stub)
   int **l_ptr=(void *)ptr+offset+8;
   int *i_ptr=*l_ptr;
 #else
-  int *ptr=(int *)(stub+8);
-  int *ptr2=(int *)(stub+12);
+  int *ptr=(int *)((int)stub+8);
+  int *ptr2=(int *)((int)stub+12);
   assert((*ptr&0x0ff00000)==0x03000000); //movw
   assert((*ptr2&0x0ff00000)==0x03400000); //movt
   int *i_ptr=(int*)((*ptr&0xfff)|((*ptr>>4)&0xf000)|((*ptr2&0xfff)<<16)|((*ptr2&0xf0000)<<12));
@@ -523,8 +469,8 @@ static int get_pointer(void *stub)
   int **l_ptr=(void *)ptr+offset+8;
   int *i_ptr=*l_ptr;
 #else
-  int *ptr=(int *)(stub+8);
-  int *ptr2=(int *)(stub+12);
+  int *ptr=(int *)((int)stub+8);
+  int *ptr2=(int *)((int)stub+12);
   assert((*ptr&0x0ff00000)==0x03000000); //movw
   assert((*ptr2&0x0ff00000)==0x03400000); //movt
   int *i_ptr=(int*)((*ptr&0xfff)|((*ptr>>4)&0xf000)|((*ptr2&0xfff)<<16)|((*ptr2&0xf0000)<<12));
@@ -659,41 +605,41 @@ static void get_bounds(int addr,u_int *start,u_int *end)
 
 // Note: registers are allocated clean (unmodified state)
 // if you intend to modify the register, you must call dirty_reg().
-static void alloc_reg(struct regstat *cur,int i,signed char reg)
+static void alloc_reg(struct regstat *cur,int i,signed char tr)
 {
   int r,hr;
-  int preferred_reg = (reg&7);
-  if(reg==CCREG) preferred_reg=HOST_CCREG;
-  if(reg==PTEMP||reg==FTEMP) preferred_reg=12;
+  int preferred_reg = (tr&7);
+  if(tr==CCREG) preferred_reg=HOST_CCREG;
+  if(tr==PTEMP||tr==FTEMP) preferred_reg=12;
   
   // Don't allocate unused registers
-  if((cur->u>>reg)&1) return;
+  if((cur->u>>tr)&1) return;
   
   // see if it's already allocated
   for(hr=0;hr<HOST_REGS;hr++)
   {
-    if(cur->regmap[hr]==reg) return;
+    if(cur->regmap[hr]==tr) return;
   }
   
   // Keep the same mapping if the register was already allocated in a loop
-  preferred_reg = loop_reg(i,reg,preferred_reg);
+  preferred_reg = loop_reg(i,tr,preferred_reg);
   
   // Try to allocate the preferred register
   if(cur->regmap[preferred_reg]==-1) {
-    cur->regmap[preferred_reg]=reg;
+    cur->regmap[preferred_reg]=tr;
     cur->dirty&=~(1<<preferred_reg);
     cur->isconst&=~(1<<preferred_reg);
     return;
   }
   r=cur->regmap[preferred_reg];
   if(r<64&&((cur->u>>r)&1)) {
-    cur->regmap[preferred_reg]=reg;
+    cur->regmap[preferred_reg]=tr;
     cur->dirty&=~(1<<preferred_reg);
     cur->isconst&=~(1<<preferred_reg);
     return;
   }
   if(r>=64&&((cur->uu>>(r&63))&1)) {
-    cur->regmap[preferred_reg]=reg;
+    cur->regmap[preferred_reg]=tr;
     cur->dirty&=~(1<<preferred_reg);
     cur->isconst&=~(1<<preferred_reg);
     return;
@@ -724,7 +670,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char reg)
     for(hr=0;hr<HOST_REGS;hr++) {
       if(hr!=EXCLUDE_REG&&cur->regmap[hr]==-1) {
         if(regs[i-1].regmap[hr]!=rs1[i-1]&&regs[i-1].regmap[hr]!=rs2[i-1]&&regs[i-1].regmap[hr]!=rt1[i-1]&&regs[i-1].regmap[hr]!=rt2[i-1]) {
-          cur->regmap[hr]=reg;
+          cur->regmap[hr]=tr;
           cur->dirty&=~(1<<hr);
           cur->isconst&=~(1<<hr);
           return;
@@ -735,7 +681,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char reg)
   // Try to allocate any available register
   for(hr=0;hr<HOST_REGS;hr++) {
     if(hr!=EXCLUDE_REG&&cur->regmap[hr]==-1) {
-      cur->regmap[hr]=reg;
+      cur->regmap[hr]=tr;
       cur->dirty&=~(1<<hr);
       cur->isconst&=~(1<<hr);
       return;
@@ -767,7 +713,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char reg)
             cur->isconst&=~(1<<hr);
           }
         }
-        cur->regmap[preferred_reg]=reg;
+        cur->regmap[preferred_reg]=tr;
         return;
       }
       for(r=1;r<=MAXREG;r++)
@@ -776,7 +722,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char reg)
           for(hr=0;hr<HOST_REGS;hr++) {
             if(hr!=HOST_CCREG||j<hsn[CCREG]) {
               if(cur->regmap[hr]==r+64) {
-                cur->regmap[hr]=reg;
+                cur->regmap[hr]=tr;
                 cur->dirty&=~(1<<hr);
                 cur->isconst&=~(1<<hr);
                 return;
@@ -786,7 +732,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char reg)
           for(hr=0;hr<HOST_REGS;hr++) {
             if(hr!=HOST_CCREG||j<hsn[CCREG]) {
               if(cur->regmap[hr]==r) {
-                cur->regmap[hr]=reg;
+                cur->regmap[hr]=tr;
                 cur->dirty&=~(1<<hr);
                 cur->isconst&=~(1<<hr);
                 return;
@@ -804,7 +750,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char reg)
       if(hsn[r]==j) {
         for(hr=0;hr<HOST_REGS;hr++) {
           if(cur->regmap[hr]==r+64) {
-            cur->regmap[hr]=reg;
+            cur->regmap[hr]=tr;
             cur->dirty&=~(1<<hr);
             cur->isconst&=~(1<<hr);
             return;
@@ -812,7 +758,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char reg)
         }
         for(hr=0;hr<HOST_REGS;hr++) {
           if(cur->regmap[hr]==r) {
-            cur->regmap[hr]=reg;
+            cur->regmap[hr]=tr;
             cur->dirty&=~(1<<hr);
             cur->isconst&=~(1<<hr);
             return;
@@ -824,42 +770,42 @@ static void alloc_reg(struct regstat *cur,int i,signed char reg)
   DebugMessage(M64MSG_ERROR, "This shouldn't happen (alloc_reg)");exit(1);
 }
 
-static void alloc_reg64(struct regstat *cur,int i,signed char reg)
+static void alloc_reg64(struct regstat *cur,int i,signed char tr)
 {
-  int preferred_reg = 8+(reg&1);
+  int preferred_reg = 8+(tr&1);
   int r,hr;
   
   // allocate the lower 32 bits
-  alloc_reg(cur,i,reg);
+  alloc_reg(cur,i,tr);
   
   // Don't allocate unused registers
-  if((cur->uu>>reg)&1) return;
+  if((cur->uu>>tr)&1) return;
   
   // see if the upper half is already allocated
   for(hr=0;hr<HOST_REGS;hr++)
   {
-    if(cur->regmap[hr]==reg+64) return;
+    if(cur->regmap[hr]==tr+64) return;
   }
   
   // Keep the same mapping if the register was already allocated in a loop
-  preferred_reg = loop_reg(i,reg,preferred_reg);
+  preferred_reg = loop_reg(i,tr,preferred_reg);
   
   // Try to allocate the preferred register
   if(cur->regmap[preferred_reg]==-1) {
-    cur->regmap[preferred_reg]=reg|64;
+    cur->regmap[preferred_reg]=tr|64;
     cur->dirty&=~(1<<preferred_reg);
     cur->isconst&=~(1<<preferred_reg);
     return;
   }
   r=cur->regmap[preferred_reg];
   if(r<64&&((cur->u>>r)&1)) {
-    cur->regmap[preferred_reg]=reg|64;
+    cur->regmap[preferred_reg]=tr|64;
     cur->dirty&=~(1<<preferred_reg);
     cur->isconst&=~(1<<preferred_reg);
     return;
   }
   if(r>=64&&((cur->uu>>(r&63))&1)) {
-    cur->regmap[preferred_reg]=reg|64;
+    cur->regmap[preferred_reg]=tr|64;
     cur->dirty&=~(1<<preferred_reg);
     cur->isconst&=~(1<<preferred_reg);
     return;
@@ -890,7 +836,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char reg)
     for(hr=0;hr<HOST_REGS;hr++) {
       if(hr!=EXCLUDE_REG&&cur->regmap[hr]==-1) {
         if(regs[i-1].regmap[hr]!=rs1[i-1]&&regs[i-1].regmap[hr]!=rs2[i-1]&&regs[i-1].regmap[hr]!=rt1[i-1]&&regs[i-1].regmap[hr]!=rt2[i-1]) {
-          cur->regmap[hr]=reg|64;
+          cur->regmap[hr]=tr|64;
           cur->dirty&=~(1<<hr);
           cur->isconst&=~(1<<hr);
           return;
@@ -901,7 +847,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char reg)
   // Try to allocate any available register
   for(hr=0;hr<HOST_REGS;hr++) {
     if(hr!=EXCLUDE_REG&&cur->regmap[hr]==-1) {
-      cur->regmap[hr]=reg|64;
+      cur->regmap[hr]=tr|64;
       cur->dirty&=~(1<<hr);
       cur->isconst&=~(1<<hr);
       return;
@@ -933,7 +879,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char reg)
             cur->isconst&=~(1<<hr);
           }
         }
-        cur->regmap[preferred_reg]=reg|64;
+        cur->regmap[preferred_reg]=tr|64;
         return;
       }
       for(r=1;r<=MAXREG;r++)
@@ -942,7 +888,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char reg)
           for(hr=0;hr<HOST_REGS;hr++) {
             if(hr!=HOST_CCREG||j<hsn[CCREG]) {
               if(cur->regmap[hr]==r+64) {
-                cur->regmap[hr]=reg|64;
+                cur->regmap[hr]=tr|64;
                 cur->dirty&=~(1<<hr);
                 cur->isconst&=~(1<<hr);
                 return;
@@ -952,7 +898,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char reg)
           for(hr=0;hr<HOST_REGS;hr++) {
             if(hr!=HOST_CCREG||j<hsn[CCREG]) {
               if(cur->regmap[hr]==r) {
-                cur->regmap[hr]=reg|64;
+                cur->regmap[hr]=tr|64;
                 cur->dirty&=~(1<<hr);
                 cur->isconst&=~(1<<hr);
                 return;
@@ -970,7 +916,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char reg)
       if(hsn[r]==j) {
         for(hr=0;hr<HOST_REGS;hr++) {
           if(cur->regmap[hr]==r+64) {
-            cur->regmap[hr]=reg|64;
+            cur->regmap[hr]=tr|64;
             cur->dirty&=~(1<<hr);
             cur->isconst&=~(1<<hr);
             return;
@@ -978,7 +924,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char reg)
         }
         for(hr=0;hr<HOST_REGS;hr++) {
           if(cur->regmap[hr]==r) {
-            cur->regmap[hr]=reg|64;
+            cur->regmap[hr]=tr|64;
             cur->dirty&=~(1<<hr);
             cur->isconst&=~(1<<hr);
             return;
@@ -993,7 +939,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char reg)
 // Allocate a temporary register.  This is done without regard to
 // dirty status or whether the register we request is on the unneeded list
 // Note: This will only allocate one register, even if called multiple times
-static void alloc_reg_temp(struct regstat *cur,int i,signed char reg)
+static void alloc_reg_temp(struct regstat *cur,int i,signed char tr)
 {
   int r,hr;
   int preferred_reg = -1;
@@ -1001,13 +947,13 @@ static void alloc_reg_temp(struct regstat *cur,int i,signed char reg)
   // see if it's already allocated
   for(hr=0;hr<HOST_REGS;hr++)
   {
-    if(hr!=EXCLUDE_REG&&cur->regmap[hr]==reg) return;
+    if(hr!=EXCLUDE_REG&&cur->regmap[hr]==tr) return;
   }
   
   // Try to allocate any available register
   for(hr=HOST_REGS-1;hr>=0;hr--) {
     if(hr!=EXCLUDE_REG&&cur->regmap[hr]==-1) {
-      cur->regmap[hr]=reg;
+      cur->regmap[hr]=tr;
       cur->dirty&=~(1<<hr);
       cur->isconst&=~(1<<hr);
       return;
@@ -1022,7 +968,7 @@ static void alloc_reg_temp(struct regstat *cur,int i,signed char reg)
       if(r<64) {
         if((cur->u>>r)&1) {
           if(i==0||((unneeded_reg[i-1]>>r)&1)) {
-            cur->regmap[hr]=reg;
+            cur->regmap[hr]=tr;
             cur->dirty&=~(1<<hr);
             cur->isconst&=~(1<<hr);
             return;
@@ -1033,7 +979,7 @@ static void alloc_reg_temp(struct regstat *cur,int i,signed char reg)
       {
         if((cur->uu>>(r&63))&1) {
           if(i==0||((unneeded_reg_upper[i-1]>>(r&63))&1)) {
-            cur->regmap[hr]=reg;
+            cur->regmap[hr]=tr;
             cur->dirty&=~(1<<hr);
             cur->isconst&=~(1<<hr);
             return;
@@ -1065,7 +1011,7 @@ static void alloc_reg_temp(struct regstat *cur,int i,signed char reg)
           for(hr=0;hr<HOST_REGS;hr++) {
             if(hr!=HOST_CCREG||hsn[CCREG]>2) {
               if(cur->regmap[hr]==r+64) {
-                cur->regmap[hr]=reg;
+                cur->regmap[hr]=tr;
                 cur->dirty&=~(1<<hr);
                 cur->isconst&=~(1<<hr);
                 return;
@@ -1075,7 +1021,7 @@ static void alloc_reg_temp(struct regstat *cur,int i,signed char reg)
           for(hr=0;hr<HOST_REGS;hr++) {
             if(hr!=HOST_CCREG||hsn[CCREG]>2) {
               if(cur->regmap[hr]==r) {
-                cur->regmap[hr]=reg;
+                cur->regmap[hr]=tr;
                 cur->dirty&=~(1<<hr);
                 cur->isconst&=~(1<<hr);
                 return;
@@ -1093,7 +1039,7 @@ static void alloc_reg_temp(struct regstat *cur,int i,signed char reg)
       if(hsn[r]==j) {
         for(hr=0;hr<HOST_REGS;hr++) {
           if(cur->regmap[hr]==r+64) {
-            cur->regmap[hr]=reg;
+            cur->regmap[hr]=tr;
             cur->dirty&=~(1<<hr);
             cur->isconst&=~(1<<hr);
             return;
@@ -1101,7 +1047,7 @@ static void alloc_reg_temp(struct regstat *cur,int i,signed char reg)
         }
         for(hr=0;hr<HOST_REGS;hr++) {
           if(cur->regmap[hr]==r) {
-            cur->regmap[hr]=reg;
+            cur->regmap[hr]=tr;
             cur->dirty&=~(1<<hr);
             cur->isconst&=~(1<<hr);
             return;
@@ -1113,7 +1059,7 @@ static void alloc_reg_temp(struct regstat *cur,int i,signed char reg)
   DebugMessage(M64MSG_ERROR, "This shouldn't happen");exit(1);
 }
 // Allocate a specific ARM register.
-static void alloc_arm_reg(struct regstat *cur,int i,signed char reg,char hr)
+static void alloc_arm_reg(struct regstat *cur,int i,signed char tr,char hr)
 {
   int n;
   int dirty=0;
@@ -1121,13 +1067,13 @@ static void alloc_arm_reg(struct regstat *cur,int i,signed char reg,char hr)
   // see if it's already allocated (and dealloc it)
   for(n=0;n<HOST_REGS;n++)
   {
-    if(n!=EXCLUDE_REG&&cur->regmap[n]==reg) {
+    if(n!=EXCLUDE_REG&&cur->regmap[n]==tr) {
       dirty=(cur->dirty>>n)&1;
       cur->regmap[n]=-1;
     }
   }
   
-  cur->regmap[hr]=reg;
+  cur->regmap[hr]=tr;
   cur->dirty&=~(1<<hr);
   cur->dirty|=dirty<<hr;
   cur->isconst&=~(1<<hr);
@@ -2276,41 +2222,41 @@ static void emit_mul(u_int rs1,u_int rs2,u_int rt)
   assem_debug("mul %s,%s,%s",regname[rt],regname[rs1],regname[rs2]);
   output_w32(0xe0000090|(rt<<16)|(rs2<<8)|rs1);
 }
-static void emit_umull(u_int rs1, u_int rs2, u_int hi, u_int lo)
+static void emit_umull(u_int rs1, u_int rs2, u_int high, u_int low)
 {
-  assem_debug("umull %s, %s, %s, %s",regname[lo],regname[hi],regname[rs1],regname[rs2]);
+  assem_debug("umull %s, %s, %s, %s",regname[low],regname[high],regname[rs1],regname[rs2]);
   assert(rs1<16);
   assert(rs2<16);
-  assert(hi<16);
-  assert(lo<16);
-  output_w32(0xe0800090|(hi<<16)|(lo<<12)|(rs2<<8)|rs1);
+  assert(high<16);
+  assert(low<16);
+  output_w32(0xe0800090|(high<<16)|(low<<12)|(rs2<<8)|rs1);
 }
-static void emit_umlal(u_int rs1, u_int rs2, u_int hi, u_int lo)
+static void emit_umlal(u_int rs1, u_int rs2, u_int high, u_int low)
 {
-  assem_debug("umlal %s, %s, %s, %s",regname[lo],regname[hi],regname[rs1],regname[rs2]);
+  assem_debug("umlal %s, %s, %s, %s",regname[low],regname[high],regname[rs1],regname[rs2]);
   assert(rs1<16);
   assert(rs2<16);
-  assert(hi<16);
-  assert(lo<16);
-  output_w32(0xe0a00090|(hi<<16)|(lo<<12)|(rs2<<8)|rs1);
+  assert(high<16);
+  assert(low<16);
+  output_w32(0xe0a00090|(high<<16)|(low<<12)|(rs2<<8)|rs1);
 }
-static void emit_smull(u_int rs1, u_int rs2, u_int hi, u_int lo)
+static void emit_smull(u_int rs1, u_int rs2, u_int high, u_int low)
 {
-  assem_debug("smull %s, %s, %s, %s",regname[lo],regname[hi],regname[rs1],regname[rs2]);
+  assem_debug("smull %s, %s, %s, %s",regname[low],regname[high],regname[rs1],regname[rs2]);
   assert(rs1<16);
   assert(rs2<16);
-  assert(hi<16);
-  assert(lo<16);
-  output_w32(0xe0c00090|(hi<<16)|(lo<<12)|(rs2<<8)|rs1);
+  assert(high<16);
+  assert(low<16);
+  output_w32(0xe0c00090|(high<<16)|(low<<12)|(rs2<<8)|rs1);
 }
-static void emit_smlal(u_int rs1, u_int rs2, u_int hi, u_int lo)
+static void emit_smlal(u_int rs1, u_int rs2, u_int high, u_int low)
 {
-  assem_debug("smlal %s, %s, %s, %s",regname[lo],regname[hi],regname[rs1],regname[rs2]);
+  assem_debug("smlal %s, %s, %s, %s",regname[low],regname[high],regname[rs1],regname[rs2]);
   assert(rs1<16);
   assert(rs2<16);
-  assert(hi<16);
-  assert(lo<16);
-  output_w32(0xe0e00090|(hi<<16)|(lo<<12)|(rs2<<8)|rs1);
+  assert(high<16);
+  assert(low<16);
+  output_w32(0xe0e00090|(high<<16)|(low<<12)|(rs2<<8)|rs1);
 }
 
 static void emit_sdiv(u_int rs1,u_int rs2,u_int rt)
@@ -2681,7 +2627,7 @@ static void emit_fcmpd(int x,int y)
   output_w32(0xeeb46b47);
 } 
 
-static void emit_fmstat()
+static void emit_fmstat(void)
 {
   assem_debug("fmstat");
   output_w32(0xeef1fa10);
@@ -3009,7 +2955,7 @@ static void inline_readstub(int type, int i, u_int addr, signed char regmap[], i
   // but not doing so causes random crashes...
   emit_readword((int)&g_cp0_regs[CP0_COUNT_REG],HOST_TEMPREG);
   emit_readword((int)&next_interupt,2);
-  emit_addimm(HOST_TEMPREG,-CLOCK_DIVIDER*(adj+1),HOST_TEMPREG);
+  emit_addimm(HOST_TEMPREG,-(int)CLOCK_DIVIDER*(adj+1),HOST_TEMPREG);
   emit_writeword(2,(int)&last_count);
   emit_sub(HOST_TEMPREG,2,cc<0?HOST_TEMPREG:cc);
   if(cc<0) {
@@ -3181,7 +3127,7 @@ static void inline_writestub(int type, int i, u_int addr, signed char regmap[], 
   emit_call((int)&indirect_jump);
   emit_readword((int)&g_cp0_regs[CP0_COUNT_REG],HOST_TEMPREG);
   emit_readword((int)&next_interupt,2);
-  emit_addimm(HOST_TEMPREG,-CLOCK_DIVIDER*(adj+1),HOST_TEMPREG);
+  emit_addimm(HOST_TEMPREG,-(int)CLOCK_DIVIDER*(adj+1),HOST_TEMPREG);
   emit_writeword(2,(int)&last_count);
   emit_sub(HOST_TEMPREG,2,cc<0?HOST_TEMPREG:cc);
   if(cc<0) {
@@ -3198,7 +3144,7 @@ static void do_unalignedwritestub(int n)
   emit_jmp(stubs[n][2]); // return address
 }
 
-void printregs(int edi,int esi,int ebp,int esp,int b,int d,int c,int a)
+static void printregs(int edi,int esi,int ebp,int esp,int b,int d,int c,int a)
 {
   DebugMessage(M64MSG_VERBOSE, "regs: %x %x %x %x %x %x %x (%x)",a,b,c,d,ebp,esi,edi,(&edi)[-1]);
 }
@@ -3239,7 +3185,7 @@ static int do_dirty_stub(int i)
   return entry;
 }
 
-static void do_dirty_stub_ds()
+static void do_dirty_stub_ds(void)
 {
   // Careful about the code output here, verify_dirty needs to parse it.
   #ifdef ARMv5_ONLY
@@ -3374,9 +3320,9 @@ static void gen_orig_addr_w(int ar, int map) {
 }
 
 // Generate the address of the memory_map entry, relative to dynarec_local
-static void generate_map_const(u_int addr,int reg) {
-  //DebugMessage(M64MSG_VERBOSE, "generate_map_const(%x,%s)",addr,regname[reg]);
-  emit_movimm((addr>>12)+(((u_int)memory_map-(u_int)&dynarec_local)>>2),reg);
+static void generate_map_const(u_int addr,int tr) {
+  //DebugMessage(M64MSG_VERBOSE, "generate_map_const(%x,%s)",addr,regname[tr]);
+  emit_movimm((addr>>12)+(((u_int)memory_map-(u_int)&dynarec_local)>>2),tr);
 }
 
 /* Special assem */
@@ -3691,7 +3637,7 @@ static void cop0_assemble(int i,struct regstat *i_regs)
     if(copr==9||copr==11||copr==12) {
       emit_readword((int)&g_cp0_regs[CP0_COUNT_REG],HOST_CCREG);
       emit_readword((int)&next_interupt,ECX);
-      emit_addimm(HOST_CCREG,-CLOCK_DIVIDER*ccadj[i],HOST_CCREG);
+      emit_addimm(HOST_CCREG,-(int)CLOCK_DIVIDER*ccadj[i],HOST_CCREG);
       emit_sub(HOST_CCREG,ECX,HOST_CCREG);
       emit_writeword(ECX,(int)&last_count);
       emit_storereg(CCREG,HOST_CCREG);
@@ -4362,25 +4308,25 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
       {
         signed char m1=get_reg(i_regs->regmap,rs1[i]);
         signed char m2=get_reg(i_regs->regmap,rs2[i]);
-        signed char hi=get_reg(i_regs->regmap,HIREG);
-        signed char lo=get_reg(i_regs->regmap,LOREG);
+        signed char high=get_reg(i_regs->regmap,HIREG);
+        signed char low=get_reg(i_regs->regmap,LOREG);
         assert(m1>=0);
         assert(m2>=0);
-        assert(hi>=0);
-        assert(lo>=0);
-        emit_smull(m1,m2,hi,lo);
+        assert(high>=0);
+        assert(low>=0);
+        emit_smull(m1,m2,high,low);
       }
       if(opcode2[i]==0x19) // MULTU
       {
         signed char m1=get_reg(i_regs->regmap,rs1[i]);
         signed char m2=get_reg(i_regs->regmap,rs2[i]);
-        signed char hi=get_reg(i_regs->regmap,HIREG);
-        signed char lo=get_reg(i_regs->regmap,LOREG);
+        signed char high=get_reg(i_regs->regmap,HIREG);
+        signed char low=get_reg(i_regs->regmap,LOREG);
         assert(m1>=0);
         assert(m2>=0);
-        assert(hi>=0);
-        assert(lo>=0);
-        emit_umull(m1,m2,hi,lo);
+        assert(high>=0);
+        assert(low>=0);
+        emit_umull(m1,m2,high,low);
       }
       if(opcode2[i]==0x1A) // DIV
       {
@@ -4654,15 +4600,15 @@ static void do_miniht_insert(u_int return_address,int rt,int temp) {
 static void wb_sx(signed char pre[],signed char entry[],uint64_t dirty,uint64_t is32_pre,uint64_t is32,uint64_t u,uint64_t uu)
 {
   if(is32_pre==is32) return;
-  int hr,reg;
+  int hr,tr;
   for(hr=0;hr<HOST_REGS;hr++) {
     if(hr!=EXCLUDE_REG) {
       //if(pre[hr]==entry[hr]) {
-        if((reg=pre[hr])>=0) {
+        if((tr=pre[hr])>=0) {
           if((dirty>>hr)&1) {
-            if( ((is32_pre&~is32&~uu)>>reg)&1 ) {
+            if( ((is32_pre&~is32&~uu)>>tr)&1 ) {
               emit_sarimm(hr,31,HOST_TEMPREG);
-              emit_storereg(reg|64,HOST_TEMPREG);
+              emit_storereg(tr|64,HOST_TEMPREG);
             }
           }
         }
@@ -4674,22 +4620,22 @@ static void wb_sx(signed char pre[],signed char entry[],uint64_t dirty,uint64_t 
 static void wb_valid(signed char pre[],signed char entry[],u_int dirty_pre,u_int dirty,uint64_t is32_pre,uint64_t u,uint64_t uu)
 {
   //if(dirty_pre==dirty) return;
-  int hr,reg,new_hr;
+  int hr,tr;
   for(hr=0;hr<HOST_REGS;hr++) {
     if(hr!=EXCLUDE_REG) {
-      reg=pre[hr];
-      if(((~u)>>(reg&63))&1) {
-        if(reg>0) {
+      tr=pre[hr];
+      if(((~u)>>(tr&63))&1) {
+        if(tr>0) {
           if(((dirty_pre&~dirty)>>hr)&1) {
-            if(reg>0&&reg<36) {
-              emit_storereg(reg,hr);
-              if( ((is32_pre&~uu)>>reg)&1 ) {
+            if(tr>0&&tr<36) {
+              emit_storereg(tr,hr);
+              if( ((is32_pre&~uu)>>tr)&1 ) {
                 emit_sarimm(hr,31,HOST_TEMPREG);
-                emit_storereg(reg|64,HOST_TEMPREG);
+                emit_storereg(tr|64,HOST_TEMPREG);
               }
             }
-            else if(reg>=64) {
-              emit_storereg(reg,hr);
+            else if(tr>=64) {
+              emit_storereg(tr,hr);
             }
           }
         }
@@ -4757,7 +4703,7 @@ static void wb_invalidate_arm(signed char pre[],signed char entry[],uint64_t dir
 
 // Clearing the cache is rather slow on ARM Linux, so mark the areas
 // that need to be cleared, and then only clear these areas once.
-static void do_clear_cache()
+static void do_clear_cache(void)
 {
   int i,j;
   for (i=0;i<(1<<(TARGET_SIZE_2-17));i++)
@@ -4789,7 +4735,7 @@ static void do_clear_cache()
 }
 
 // CPU-architecture-specific initialization
-static void arch_init() {
+static void arch_init(void) {
 
   detect_arm_cpu_features();
   print_arm_cpu_features();
@@ -4811,8 +4757,8 @@ static void arch_init() {
   // Trampolines for jumps >32M
   int *ptr,*ptr2;
   ptr=(int *)jump_table_symbols;
-  ptr2=(int *)((void *)BASE_ADDR+(1<<TARGET_SIZE_2)-JUMP_TABLE_SIZE);
-  while((void *)ptr<(void *)jump_table_symbols+sizeof(jump_table_symbols))
+  ptr2=(int *)((int)BASE_ADDR+(1<<TARGET_SIZE_2)-JUMP_TABLE_SIZE);
+  while((int)ptr<(int)jump_table_symbols+sizeof(jump_table_symbols))
   {
     int offset=*ptr-(int)ptr2-8;
     if(offset>=-33554432&&offset<33554432) {

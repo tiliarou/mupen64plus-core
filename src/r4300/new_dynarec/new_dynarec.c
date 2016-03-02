@@ -18,26 +18,22 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.          *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-#include <assert.h>
-#include <stdarg.h>
-#include <stdint.h> //include for uint64_t
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #if defined(__APPLE__)
 #include <sys/types.h> // needed for u_int, u_char, etc
-
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include "../../main/main.h"
-#include "../../main/rom.h"
-#include "../../memory/memory.h"
-#include "../../rsp/rsp_core.h"
+#include "new_dynarec.h"
+#include "main/main.h"
+#include "main/rom.h"
+#include "memory/memory.h"
+#include "rsp/rsp_core.h"
 #include "../cached_interp.h"
 #include "../cp0_private.h"
 #include "../cp1_private.h"
@@ -45,14 +41,11 @@ extern "C" {
 #include "../ops.h"
 #include "../r4300.h"
 #include "../recomp.h"
-#include "../recomph.h" //include for function prototypes
+#include "../recomph.h"
 #include "../tlb.h"
-#include "new_dynarec.h"
-#ifdef __cplusplus
-}
-#endif
+#include "../fpu.h"
 
-#if !defined(_MSC_VER)
+#if !defined(WIN32)
 #include <sys/mman.h>
 #endif
 
@@ -65,11 +58,19 @@ extern "C" {
 #error Unsupported dynarec architecture
 #endif
 
+// Uncomment this line to debug cycle count:
+//#define DEBUG_CYCLE_COUNT 1
+
+// Uncomment these two lines to generate debug output:
+//#define ASSEM_DEBUG 1
+//#define INV_DEBUG 1
+
+// Uncomment this line to output the number of NOTCOMPILED blocks as they occur:
+//#define COUNT_NOTCOMPILEDS 1
+
 #define MAXBLOCK 4096
 #define MAX_OUTPUT_BLOCK_SIZE 262144
 #define CLOCK_DIVIDER count_per_op
-
-void *base_addr;
 
 struct regstat
 {
@@ -94,21 +95,14 @@ struct ll_entry
   struct ll_entry *next;
 };
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-extern u_char restore_candidate[512];
-extern int cycle_count;
-extern int last_count;
-extern int branch_target;
-extern uint64_t readmem_dword;
-extern struct ll_entry *jump_in[4096];
-extern struct ll_entry *jump_dirty[4096];
-extern ALIGN(16, u_int hash_table[65536][4]);
-#ifdef __cplusplus
-}
-#endif
+void *base_addr;
+u_char *out;
+ALIGN(16, u_int hash_table[65536][4]);
+struct ll_entry *jump_in[4096];
+struct ll_entry *jump_dirty[4096];
 
+static struct ll_entry *jump_out[4096];
+ALIGN(16, static char shadow[2097152]);
 static u_int start;
 static u_int *source;
 static u_int pagelimit;
@@ -138,10 +132,6 @@ static uint64_t branch_unneeded_reg_upper[MAXBLOCK];
 static uint64_t p32[MAXBLOCK];
 static uint64_t pr32[MAXBLOCK];
 static signed char regmap_pre[MAXBLOCK][HOST_REGS];
-#ifdef ASSEM_DEBUG
-static signed char regmap[MAXBLOCK][HOST_REGS];
-static signed char regmap_entry[MAXBLOCK][HOST_REGS];
-#endif
 static uint64_t constmap[MAXBLOCK][HOST_REGS];
 static struct regstat regs[MAXBLOCK];
 static struct regstat branch_regs[MAXBLOCK];
@@ -160,19 +150,22 @@ static int stubcount;
 static int literalcount;
 static int is_delayslot;
 static int cop1_usable;
-u_char *out;
-struct ll_entry *jump_in[4096];
-static struct ll_entry *jump_out[4096];
-struct ll_entry *jump_dirty[4096];
-ALIGN(16, u_int hash_table[65536][4]);
-ALIGN(16, static char shadow[2097152]);
 static char *copy;
 static int expirep;
-u_int using_tlb;
+static u_int using_tlb;
 static u_int stop_after_jal;
 
-  /* registers that may be allocated */
-  /* 1-31 gpr */
+#ifdef COUNT_NOTCOMPILEDS
+static int notcompiledCount = 0;
+#endif
+
+#ifdef ASSEM_DEBUG
+static signed char regmap[MAXBLOCK][HOST_REGS];
+static signed char regmap_entry[MAXBLOCK][HOST_REGS];
+#endif
+
+/* registers that may be allocated */
+/* 1-31 gpr */
 #define HIREG 32 // hi
 #define LOREG 33 // lo
 #define FSREG 34 // FPU status (FCSR)
@@ -195,7 +188,7 @@ static u_int stop_after_jal;
 #define MGEN2 49 // Maptable address generation temporary register
 #define BTREG 50 // Branch target temporary register
 
-  /* instruction types */
+/* instruction types */
 #define NOP 0     // No operation
 #define LOAD 1    // Load
 #define STORE 2   // Store
@@ -223,7 +216,7 @@ static u_int stop_after_jal;
 #define SPAN 24   // Branch/delay slot spans 2 pages
 #define NI 25     // Not implemented
 
-  /* stubs */
+/* stubs */
 #define CC_STUB 1
 #define FP_STUB 2
 #define LOADB_STUB 3
@@ -239,102 +232,25 @@ static u_int stop_after_jal;
 #define STORELR_STUB 13
 #define INVCODE_STUB 14
 
-  /* branch codes */
+/* branch codes */
 #define TAKEN 1
 #define NOTTAKEN 2
 #define NULLDS 3
 
-/* bug-fix to implement __clear_cache (missing in Android; http://code.google.com/p/android/issues/detail?id=1803) */
-void __clear_cache_bugfix(char* begin, char *end);
-#ifdef ANDROID
-	#define __clear_cache __clear_cache_bugfix
-#endif
-
-// asm linkage
-#ifdef __cplusplus
-extern "C" {
-#endif
 int new_recompile_block(int addr);
 void *get_addr_ht(u_int vaddr);
-void *get_addr(u_int vaddr);
-void *get_addr_32(u_int vaddr,u_int flags);
 void add_link(u_int vaddr,void *src);
-void clean_blocks(u_int page);
-void dyna_linker();
-void dyna_linker_ds();
-void verify_code();
-void verify_code_vm();
-void verify_code_ds();
-void cc_interrupt();
-void fp_exception();
-void fp_exception_ds();
-void jump_syscall();
-void jump_eret();
-#ifdef __cplusplus
-}
-#endif
-static void remove_hash(int vaddr);
-#if NEW_DYNAREC == NEW_DYNAREC_ARM
-static void invalidate_addr(u_int addr);
-#endif
-
-// TLB
-void TLBWI_new();
-void TLBWR_new();
-#ifdef __cplusplus
-extern "C" {
-#endif
-void read_nomem_new(void);
-void read_nomemb_new(void);
-void read_nomemh_new(void);
-void read_nomemd_new(void);
-void write_nomem_new(void);
-void write_nomemb_new(void);
-void write_nomemh_new(void);
-void write_nomemd_new(void);
-void write_rdram_new(void);
-void write_rdramb_new(void);
-void write_rdramh_new(void);
-void write_rdramd_new(void);
-extern u_int memory_map[1048576];
-#ifdef __cplusplus
-}
-#endif
-
-// Needed by assembler
+void TLBWI_new(void);
+void TLBWR_new(void);
 static void wb_register(signed char r,signed char regmap[],uint64_t dirty,uint64_t is32);
 static void wb_dirtys(signed char i_regmap[],uint64_t i_is32,uint64_t i_dirty);
-static void wb_needed_dirtys(signed char i_regmap[],uint64_t i_is32,uint64_t i_dirty,int addr);
-static void load_all_regs(signed char i_regmap[]);
-static void load_needed_regs(signed char i_regmap[],signed char next_regmap[]);
 static void load_regs_entry(int t);
 static void load_all_consts(signed char regmap[],int is32,u_int dirty,int i);
-
 static void add_stub(int type,int addr,int retaddr,int a,int b,int c,int d,int e);
 static void add_to_linker(int addr,int target,int ext);
 static int verify_dirty(void *addr);
 
-//static int tracedebug=0;
-
-//#define DEBUG_CYCLE_COUNT 1
-
-// Uncomment these two lines to generate debug output:
-//#define ASSEM_DEBUG 1
-//#define INV_DEBUG 1
-
-// Uncomment this line to output the number of NOTCOMPILED blocks as they occur:
-//#define COUNT_NOTCOMPILEDS 1
-
-#if defined (COUNT_NOTCOMPILEDS )
-	int notcompiledCount = 0;
-#endif
-
-#ifdef __cplusplus
-static void nullf(...) {}
-#else
 static void nullf() {}
-#endif
-
 #if defined( ASSEM_DEBUG )
     #define assem_debug(...) DebugMessage(M64MSG_VERBOSE, __VA_ARGS__)
 #else
@@ -346,9 +262,7 @@ static void nullf() {}
     #define inv_debug nullf
 #endif
 
-#define log_message(...) DebugMessage(M64MSG_VERBOSE, __VA_ARGS__)
-
-static void tlb_hacks()
+static void tlb_hacks(void)
 {
   // Goldeneye hack
   if (strncmp((char *) ROM_HEADER.Name, "GOLDENEYE",9) == 0)
@@ -595,12 +509,12 @@ static int count_free_regs(signed char regmap[])
   return count;
 }
 
-static void dirty_reg(struct regstat *cur,signed char reg)
+static void dirty_reg(struct regstat *cur,signed char tr)
 {
   int hr;
-  if(!reg) return;
+  if(!tr) return;
   for (hr=0;hr<HOST_REGS;hr++) {
-    if((cur->regmap[hr]&63)==reg) {
+    if((cur->regmap[hr]&63)==tr) {
       cur->dirty|=(uint64_t)1<<hr;
     }
   }
@@ -613,65 +527,65 @@ static void dirty_reg(struct regstat *cur,signed char reg)
 // overwriting it (eg SLTI, DSRA32).
 static void flush_dirty_uppers(struct regstat *cur)
 {
-  int hr,reg;
+  int hr,tr;
   for (hr=0;hr<HOST_REGS;hr++) {
     if((cur->dirty>>hr)&1) {
-      reg=cur->regmap[hr];
-      if(reg>=64) 
-        if((cur->is32>>(reg&63))&1) cur->regmap[hr]=-1;
+      tr=cur->regmap[hr];
+      if(tr>=64) 
+        if((cur->is32>>(tr&63))&1) cur->regmap[hr]=-1;
     }
   }
 }
 
-static void set_const(struct regstat *cur,signed char reg,uint64_t value)
+static void set_const(struct regstat *cur,signed char tr,uint64_t value)
 {
   int hr;
-  if(!reg) return;
+  if(!tr) return;
   for (hr=0;hr<HOST_REGS;hr++) {
-    if(cur->regmap[hr]==reg) {
+    if(cur->regmap[hr]==tr) {
       cur->isconst|=1<<hr;
       cur->constmap[hr]=value;
     }
-    else if((cur->regmap[hr]^64)==reg) {
+    else if((cur->regmap[hr]^64)==tr) {
       cur->isconst|=1<<hr;
       cur->constmap[hr]=value>>32;
     }
   }
 }
 
-static void clear_const(struct regstat *cur,signed char reg)
+static void clear_const(struct regstat *cur,signed char tr)
 {
   int hr;
-  if(!reg) return;
+  if(!tr) return;
   for (hr=0;hr<HOST_REGS;hr++) {
-    if((cur->regmap[hr]&63)==reg) {
+    if((cur->regmap[hr]&63)==tr) {
       cur->isconst&=~(1<<hr);
     }
   }
 }
 
-static int is_const(struct regstat *cur,signed char reg)
+static int is_const(struct regstat *cur,signed char tr)
 {
   int hr;
-  if(reg<0) return 0;
-  if(!reg) return 1;
+  if(tr<0) return 0;
+  if(!tr) return 1;
   for (hr=0;hr<HOST_REGS;hr++) {
-    if((cur->regmap[hr]&63)==reg) {
+    if((cur->regmap[hr]&63)==tr) {
       return (cur->isconst>>hr)&1;
     }
   }
   return 0;
 }
-static uint64_t get_const(struct regstat *cur,signed char reg)
+static uint64_t get_const(struct regstat *cur,signed char tr)
 {
   int hr;
-  if(!reg) return 0;
+  if(!tr) return 0;
   for (hr=0;hr<HOST_REGS;hr++) {
-    if(cur->regmap[hr]==reg) {
+    if(cur->regmap[hr]==tr) {
       return cur->constmap[hr];
     }
   }
-  DebugMessage(M64MSG_ERROR, "Unknown constant in r%d",reg);
+  DebugMessage(M64MSG_ERROR, "Unknown constant in r%d",tr);
   exit(1);
 }
 
@@ -862,10 +776,10 @@ static int loop_reg(int i, int r, int hr)
       if(ba[i+k]>=start && ba[i+k]<(start+i*4))
       {
         int t=(ba[i+k]-start)>>2;
-        int reg=get_reg(regs[t].regmap_entry,r);
-        if(reg>=0) return reg;
-        //reg=get_reg(regs[t+1].regmap_entry,r);
-        //if(reg>=0) return reg;
+        int tr=get_reg(regs[t].regmap_entry,r);
+        if(tr>=0) return tr;
+        //tr=get_reg(regs[t+1].regmap_entry,r);
+        //if(tr>=0) return tr;
       }
     }
   }
@@ -912,6 +826,7 @@ static void divu64(uint64_t dividend,uint64_t divisor)
   //                                     ,(int)reg[LOREG],(int)(reg[LOREG]>>32));
 }
 
+#if 0
 static void mult64(int64_t m1,int64_t m2)
 {
    unsigned long long int op1, op2, op3, op4;
@@ -957,7 +872,6 @@ static void mult64(int64_t m1,int64_t m2)
      }
 }
 
-#if NEW_DYNAREC == NEW_DYNAREC_ARM
 static void multu64(uint64_t m1,uint64_t m2)
 {
    unsigned long long int op1, op2, op3, op4;
@@ -1261,7 +1175,7 @@ void invalidate_block(u_int block)
   #endif
 }
 
-void invalidate_cached_code_new_dynarec(uint32_t address, size_t size)
+void invalidate_cached_code_new_dynarec(uint32_t addr, size_t size)
 {
     size_t i;
     size_t begin;
@@ -1274,8 +1188,8 @@ void invalidate_cached_code_new_dynarec(uint32_t address, size_t size)
     }
     else
     {
-        begin = address >> 12;
-        end = (address+size-1) >> 12;
+        begin = addr >> 12;
+        end = (addr+size-1) >> 12;
     }
 
     for(i = begin; i <= end; ++i)
@@ -1291,7 +1205,7 @@ static void invalidate_addr(u_int addr)
 
 // This is called when loading a save state.
 // Anything could have changed, so invalidate everything.
-void invalidate_all_pages()
+void invalidate_all_pages(void)
 {
   u_int page;
   for(page=0;page<4096;page++)
@@ -1304,7 +1218,7 @@ void invalidate_all_pages()
     }
   }
   #if NEW_DYNAREC == NEW_DYNAREC_ARM
-  __clear_cache((void *)base_addr,(void *)base_addr+(1<<TARGET_SIZE_2));
+  __clear_cache((char *)base_addr,(char *)base_addr+(1<<TARGET_SIZE_2));
   //cacheflush((void *)base_addr,(void *)base_addr+(1<<TARGET_SIZE_2),0);
   #endif
   #ifdef USE_MINI_HT
@@ -2084,9 +1998,8 @@ static void wb_register(signed char r,signed char regmap[],uint64_t dirty,uint64
   }
 }
 #if 0
-static int mchecksum()
+static int mchecksum(void)
 {
-  //if(!tracedebug) return 0;
   int i;
   int sum=0;
   for(i=0;i<2097152;i++) {
@@ -2098,7 +2011,7 @@ static int mchecksum()
   return sum;
 }
 
-static int rchecksum()
+static int rchecksum(void)
 {
   int i;
   int sum=0;
@@ -2107,7 +2020,7 @@ static int rchecksum()
   return sum;
 }
 
-static void rlist()
+static void rlist(void)
 {
   int i;
   DebugMessage(M64MSG_VERBOSE, "TRACE: ");
@@ -2118,21 +2031,12 @@ static void rlist()
     DebugMessage(M64MSG_VERBOSE, "f%d:%8x%8x ",i,((int*)reg_cop1_simple[i])[1],*((int*)reg_cop1_simple[i]));
 }
 
-static void enabletrace()
-{
-  tracedebug=1;
-}
-
-
 static void memdebug(int i)
 {
   //DebugMessage(M64MSG_VERBOSE, "TRACE: count=%d next=%d (checksum %x) lo=%8x%8x",g_cp0_regs[CP0_COUNT_REG],next_interupt,mchecksum(),(int)(reg[LOREG]>>32),(int)reg[LOREG]);
   //DebugMessage(M64MSG_VERBOSE, "TRACE: count=%d next=%d (rchecksum %x)",g_cp0_regs[CP0_COUNT_REG],next_interupt,rchecksum());
   //rlist();
-  //if(tracedebug) {
-  //if(g_cp0_regs[CP0_COUNT_REG]>=-2084597794) {
   if((signed int)g_cp0_regs[CP0_COUNT_REG]>=-2084597794&&(signed int)g_cp0_regs[CP0_COUNT_REG]<0) {
-  //if(0) {
     DebugMessage(M64MSG_VERBOSE, "TRACE: count=%d next=%d (checksum %x)",g_cp0_regs[CP0_COUNT_REG],next_interupt,mchecksum());
     //DebugMessage(M64MSG_VERBOSE, "TRACE: count=%d next=%d (checksum %x) Status=%x",g_cp0_regs[CP0_COUNT_REG],next_interupt,mchecksum(),g_cp0_regs[CP0_STATUS_REG]);
     //DebugMessage(M64MSG_VERBOSE, "TRACE: count=%d next=%d (checksum %x) hi=%8x%8x",g_cp0_regs[CP0_COUNT_REG],next_interupt,mchecksum(),(int)(reg[HIREG]>>32),(int)reg[HIREG]);
@@ -2661,7 +2565,7 @@ static void imm16_assemble(int i,struct regstat *i_regs)
               else
                 emit_movimm(constmap[i][sl]|imm[i],tl);
             }
-	    }
+        }
             if(opcode[i]==0x0e) { //XORI
             if(sl<0) {
               emit_xorimm(tl,imm[i],tl);
@@ -2671,7 +2575,7 @@ static void imm16_assemble(int i,struct regstat *i_regs)
               else
                 emit_movimm(constmap[i][sl]^imm[i],tl);
             }
-	    }
+        }
           }
           else {
             emit_movimm(imm[i],tl);
@@ -4160,9 +4064,9 @@ static void address_generation(int i,struct regstat *i_regs,signed char entry[])
 
 static int get_final_value(int hr, int i, int *value)
 {
-  int reg=regs[i].regmap[hr];
+  int tr=regs[i].regmap[hr];
   while(i<slen-1) {
-    if(regs[i+1].regmap[hr]!=reg) break;
+    if(regs[i+1].regmap[hr]!=tr) break;
     if(!((regs[i+1].isconst>>hr)&1)) break;
     if(bt[i+1]) break;
     i++;
@@ -4175,7 +4079,7 @@ static int get_final_value(int hr, int i, int *value)
     if(!bt[i+1]) {
       if(itype[i+1]==UJUMP||itype[i+1]==RJUMP||itype[i+1]==CJUMP||itype[i+1]==SJUMP) {
         // Load in delay slot, out-of-order execution
-        if(itype[i+2]==LOAD&&rs1[i+2]==reg&&rt1[i+2]==reg&&((regs[i+1].wasconst>>hr)&1))
+        if(itype[i+2]==LOAD&&rs1[i+2]==tr&&rt1[i+2]==tr&&((regs[i+1].wasconst>>hr)&1))
         {
           #ifdef HOST_IMM_ADDR32
           if(!using_tlb||((signed int)constmap[i][hr]+imm[i+2])<(signed int)0xC0000000) return 0;
@@ -4190,7 +4094,7 @@ static int get_final_value(int hr, int i, int *value)
           return 1;
         }
       }
-      if(itype[i+1]==LOAD&&rs1[i+1]==reg&&rt1[i+1]==reg)
+      if(itype[i+1]==LOAD&&rs1[i+1]==tr&&rt1[i+1]==tr)
       {
         #ifdef HOST_IMM_ADDR32
         if(!using_tlb||((signed int)constmap[i][hr]+imm[i+1])<(signed int)0xC0000000) return 0;
@@ -4210,10 +4114,10 @@ static int get_final_value(int hr, int i, int *value)
   *value=constmap[i][hr];
   //DebugMessage(M64MSG_VERBOSE, "c=%x",(int)constmap[i][hr]);
   if(i==slen-1) return 1;
-  if(reg<64) {
-    return !((unneeded_reg[i+1]>>reg)&1);
+  if(tr<64) {
+    return !((unneeded_reg[i+1]>>tr)&1);
   }else{
-    return !((unneeded_reg_upper[i+1]>>reg)&1);
+    return !((unneeded_reg_upper[i+1]>>tr)&1);
   }
 }
 
@@ -5476,7 +5380,7 @@ static void cjump_assemble(int i,struct regstat *i_regs)
         #ifdef CORTEX_A8_BRANCH_PREDICTION_HACK
         if(match&&(!branch_internal||!is_ds[(ba[i]-start)>>2])) {
           if(adj) {
-            emit_addimm(cc,-CLOCK_DIVIDER*adj,cc);
+            emit_addimm(cc,-(int)CLOCK_DIVIDER*adj,cc);
             add_to_linker((int)out,ba[i],branch_internal);
           }else{
             emit_addnop(13);
@@ -5831,7 +5735,7 @@ static void sjump_assemble(int i,struct regstat *i_regs)
         #ifdef CORTEX_A8_BRANCH_PREDICTION_HACK
         if(match&&(!branch_internal||!is_ds[(ba[i]-start)>>2])) {
           if(adj) {
-            emit_addimm(cc,-CLOCK_DIVIDER*adj,cc);
+            emit_addimm(cc,-(int)CLOCK_DIVIDER*adj,cc);
             add_to_linker((int)out,ba[i],branch_internal);
           }else{
             emit_addnop(13);
@@ -6450,7 +6354,7 @@ static void pagespan_assemble(int i,struct regstat *i_regs)
 }
 
 // Assemble the delay slot for the above
-static void pagespan_ds()
+static void pagespan_ds(void)
 {
   assem_debug("initial delay slot:");
   u_int vaddr=start+1;
@@ -6790,7 +6694,7 @@ static void unneeded_registers(int istart,int iend,int r)
 // Identify registers which are likely to contain 32-bit values
 // This is used to predict whether any branches will jump to a
 // location with 64-bit values in registers.
-static void provisional_32bit()
+static void provisional_32bit(void)
 {
   int i,j;
   uint64_t is32=1;
@@ -7017,7 +6921,7 @@ static void provisional_32bit()
 // and where optimizations will rely on this.
 // This is used to determine whether backward branches can safely
 // jump to a location with 64-bit values in registers.
-static void provisional_r32()
+static void provisional_r32(void)
 {
   u_int r32=0;
   int i;
@@ -7646,7 +7550,7 @@ static void disassemble_inst(int i)
 }
 #endif
 
-void new_dynarec_init()
+void new_dynarec_init(void)
 {
   DebugMessage(M64MSG_INFO, "Init new dynarec");
 
@@ -7656,7 +7560,7 @@ void new_dynarec_init()
             MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS,
             -1, 0)) <= 0) {DebugMessage(M64MSG_ERROR, "mmap() failed");}
 #else
-#if defined(_MSC_VER)
+#if defined(WIN32)
   base_addr = VirtualAlloc(NULL, 1<<TARGET_SIZE_2, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 #else
   if ((base_addr = mmap (NULL, 1<<TARGET_SIZE_2,
@@ -7725,10 +7629,10 @@ void new_dynarec_init()
   arch_init();
 }
 
-void new_dynarec_cleanup()
+void new_dynarec_cleanup(void)
 {
   int n;
-#if defined(_MSC_VER)
+#if defined(WIN32)
   VirtualFree(base_addr, 0, MEM_RELEASE);
 #else
   if (munmap (base_addr, 1<<TARGET_SIZE_2) < 0) {DebugMessage(M64MSG_ERROR, "munmap() failed");}
@@ -7743,29 +7647,11 @@ void new_dynarec_cleanup()
 
 int new_recompile_block(int addr)
 {
-/*
-  if(addr==0x800cd050) {
-    int block;
-    for(block=0x80000;block<0x80800;block++) invalidate_block(block);
-    int n;
-    for(n=0;n<=2048;n++) ll_clear(jump_dirty+n);
-  }
-*/
-  //if(g_cp0_regs[CP0_COUNT_REG]==365117028) tracedebug=1;
   assem_debug("NOTCOMPILED: addr = %x -> %x", (int)addr, (int)out);
-#if defined (COUNT_NOTCOMPILEDS )
+#ifdef COUNT_NOTCOMPILEDS
   notcompiledCount++;
   DebugMessage(M64MSG_VERBOSE, "notcompiledCount=%i", notcompiledCount );
 #endif
-  //DebugMessage(M64MSG_VERBOSE, "NOTCOMPILED: addr = %x -> %x", (int)addr, (int)out);
-  //DebugMessage(M64MSG_VERBOSE, "TRACE: count=%d next=%d (compile %x)",g_cp0_regs[CP0_COUNT_REG],next_interupt,addr);
-  //if(debug) 
-  //DebugMessage(M64MSG_VERBOSE, "TRACE: count=%d next=%d (checksum %x)",g_cp0_regs[CP0_COUNT_REG],next_interupt,mchecksum());
-  //DebugMessage(M64MSG_VERBOSE, "fpu mapping=%x enabled=%x",(g_cp0_regs[CP0_STATUS_REG] & 0x04000000)>>26,(g_cp0_regs[CP0_STATUS_REG] & 0x20000000)>>29);
-  /*if(g_cp0_regs[CP0_COUNT_REG]>=312978186) {
-    rlist();
-  }*/
-  //rlist();
   start = (u_int)addr&~3;
   //assert(((u_int)addr&1)==0);
   if ((int)addr >= 0xa4000000 && (int)addr < 0xa4001000) {
@@ -9957,7 +9843,7 @@ int new_recompile_block(int addr)
     int loop_start[HOST_REGS];
     int score[HOST_REGS];
     int end[HOST_REGS];
-    int reg=using_tlb?MMREG:ROREG;
+    int tr=using_tlb?MMREG:ROREG;
 
     // Init
     for(hr=0;hr<HOST_REGS;hr++) {
@@ -10043,7 +9929,7 @@ int new_recompile_block(int addr)
                   }
                 }
                 else if(t<j) {
-                  if(regs[t].regmap[hr]==reg) {
+                  if(regs[t].regmap[hr]==tr) {
                     // Score a point if the branch target matches this register
                     score[hr]++;
                     end[hr]=j;
@@ -10085,32 +9971,32 @@ int new_recompile_block(int addr)
           for(j=loop_start[maxscore];j<slen&&j<=end[maxscore];j++) {
             //if(regs[j].regmap[maxscore]>=0) {DebugMessage(M64MSG_ERROR, "oops: %x %x was %d=%d",loop_start[maxscore]*4+start,j*4+start,maxscore,regs[j].regmap[maxscore]);}
             assert(regs[j].regmap[maxscore]<0);
-            if(j>loop_start[maxscore]) regs[j].regmap_entry[maxscore]=reg;
-            regs[j].regmap[maxscore]=reg;
+            if(j>loop_start[maxscore]) regs[j].regmap_entry[maxscore]=tr;
+            regs[j].regmap[maxscore]=tr;
             regs[j].dirty&=~(1<<maxscore);
             regs[j].wasconst&=~(1<<maxscore);
             regs[j].isconst&=~(1<<maxscore);
             if(itype[j]==UJUMP||itype[j]==RJUMP||itype[j]==CJUMP||itype[j]==SJUMP||itype[j]==FJUMP) {
-              branch_regs[j].regmap[maxscore]=reg;
+              branch_regs[j].regmap[maxscore]=tr;
               branch_regs[j].wasdirty&=~(1<<maxscore);
               branch_regs[j].dirty&=~(1<<maxscore);
               branch_regs[j].wasconst&=~(1<<maxscore);
               branch_regs[j].isconst&=~(1<<maxscore);
               if(itype[j]!=RJUMP&&itype[j]!=UJUMP&&(source[j]>>16)!=0x1000) {
-                regmap_pre[j+2][maxscore]=reg;
+                regmap_pre[j+2][maxscore]=tr;
                 regs[j+2].wasdirty&=~(1<<maxscore);
               }
               // loop optimization (loop_preload)
               int t=(ba[j]-start)>>2;
               if(t==loop_start[maxscore]) {
                 if(t==1||(t>1&&itype[t-2]!=UJUMP&&itype[t-2]!=RJUMP)||(t>1&&rt1[t-2]!=31)) // call/ret assumes no registers allocated
-                  regs[t].regmap_entry[maxscore]=reg;
+                  regs[t].regmap_entry[maxscore]=tr;
               }
             }
             else
             {
               if(j<1||(itype[j-1]!=RJUMP&&itype[j-1]!=UJUMP&&itype[j-1]!=CJUMP&&itype[j-1]!=SJUMP&&itype[j-1]!=FJUMP)) {
-                regmap_pre[j+1][maxscore]=reg;
+                regmap_pre[j+1][maxscore]=tr;
                 regs[j+1].wasdirty&=~(1<<maxscore);
               }
             }
@@ -10674,7 +10560,7 @@ int new_recompile_block(int addr)
     //if(ds) DebugMessage(M64MSG_VERBOSE, "ds: ");
 //    if((void*)assem_debug==(void*)printf) disassemble_inst(i);
 #if defined( ASSEM_DEBUG )
-	  disassemble_inst(i);
+    disassemble_inst(i);
 #endif
     if(ds) {
       ds=0; // Skip delay slot
