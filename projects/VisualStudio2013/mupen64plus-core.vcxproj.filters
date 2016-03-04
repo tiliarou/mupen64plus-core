@@ -402,6 +402,9 @@
     <ClCompile Include="..\..\src\debugger\dbg_memory.c">
       <Filter>debugger</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\r4300\new_dynarec\profiler.c">
+      <Filter>r4300\new_dynarec</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\ai\ai_controller.h">
@@ -724,6 +727,12 @@
     </ClInclude>
     <ClInclude Include="..\..\src\debugger\dbg_types.h">
       <Filter>debugger</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\r4300\new_dynarec\arm\arm_profiler.h">
+      <Filter>r4300\new_dynarec\arm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\r4300\new_dynarec\x86\x86_profiler.h">
+      <Filter>r4300\new_dynarec\x86</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -51,9 +51,11 @@
 
 #if NEW_DYNAREC == NEW_DYNAREC_X86
 #include "x86/assem_x86.h"
+#include "x86/x86_profiler.h"
 #elif NEW_DYNAREC == NEW_DYNAREC_ARM
 #include "arm/arm_cpu_features.h"
 #include "arm/assem_arm.h"
+#include "arm/arm_profiler.h"
 #else
 #error Unsupported dynarec architecture
 #endif
@@ -7552,8 +7554,12 @@ static void disassemble_inst(int i)
 
 void new_dynarec_init(void)
 {
-  DebugMessage(M64MSG_INFO, "Init new dynarec");
+#if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
+  profiler_init();
+#endif
 
+#ifndef PROFILER
+  DebugMessage(M64MSG_INFO, "Init new dynarec");
 #if NEW_DYNAREC == NEW_DYNAREC_ARM
   if ((base_addr = mmap ((u_char *)BASE_ADDR, 1<<TARGET_SIZE_2,
             PROT_READ | PROT_WRITE | PROT_EXEC,
@@ -7567,6 +7573,7 @@ void new_dynarec_init(void)
             PROT_READ | PROT_WRITE | PROT_EXEC,
             MAP_PRIVATE | MAP_ANONYMOUS,
             -1, 0)) <= 0) {DebugMessage(M64MSG_ERROR, "mmap() failed");}
+#endif
 #endif
 #endif
   out=(u_char *)base_addr;
@@ -7631,6 +7638,9 @@ void new_dynarec_init(void)
 
 void new_dynarec_cleanup(void)
 {
+#if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
+  profiler_cleanup();
+#endif
   int n;
 #if defined(WIN32)
   VirtualFree(base_addr, 0, MEM_RELEASE);
@@ -7647,6 +7657,9 @@ void new_dynarec_cleanup(void)
 
 int new_recompile_block(int addr)
 {
+#if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
+  profiler_block(addr);
+#endif
   assem_debug("NOTCOMPILED: addr = %x -> %x", (int)addr, (int)out);
 #ifdef COUNT_NOTCOMPILEDS
   notcompiledCount++;
