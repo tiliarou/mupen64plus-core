@@ -4160,7 +4160,6 @@ static void load_consts(signed char pre[],signed char regmap[],int is32,int i)
         if(((regs[i].isconst>>hr)&1)&&regmap[hr]<64&&regmap[hr]>0) {
           int value;
           if(get_final_value(hr,i,&value)) {
-            assert(0);
             if(value==0) {
               emit_zeroreg(hr);
             }
