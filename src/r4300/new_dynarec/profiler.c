@@ -264,6 +264,7 @@ void profiler_block(int addr)
   if(count <= 0) return;
 
   for (uint32_t i = 0; i < count; i++) {
+    printf("0x%.8x: %s %s\n", (uintptr_t)insn[i].address, insn[i].mnemonic, insn[i].op_str);
     sum += insn[i].size;
  #if NEW_DYNAREC_PROFILER >= NEW_DYNAREC_ARM
     if(INSTRUCTION.operands[1].reg == FP_REGISTER) {

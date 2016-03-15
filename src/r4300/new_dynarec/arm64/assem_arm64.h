@@ -11,7 +11,7 @@
 #define CORTEX_A8_BRANCH_PREDICTION_HACK 1
 #define USE_MINI_HT 1
 //#define REG_PREFETCH 1
-#define HAVE_CONDITIONAL_CALL 1 // ARM64: No conditional call
+//#define HAVE_CONDITIONAL_CALL 1
 #define RAM_OFFSET 1
 
 /* ARM calling convention:
@@ -32,7 +32,7 @@
 
 #define FP 29
 #define LR 30
-#define ZR 31
+#define WZR 31
 #define HOST_TEMPREG 30
 
 // Note: FP is set to &dynarec_local when executing generated code.

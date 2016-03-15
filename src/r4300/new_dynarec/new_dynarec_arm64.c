@@ -2771,7 +2771,6 @@ static void load_assemble(int i,struct regstat *i_regs)
   if(!using_tlb) {
     if(!c) {
       #ifdef RAM_OFFSET
-      assert(0); // ARM64: ROREG register is 64bit
       map=get_reg(i_regs->regmap,ROREG);
       if(map<0) emit_loadreg(ROREG,map=HOST_TEMPREG);
       #endif
@@ -2793,6 +2792,7 @@ static void load_assemble(int i,struct regstat *i_regs)
       }
     }
   }else{ // using tlb
+    assert(0);
     int x=0;
     if (opcode[i]==0x20||opcode[i]==0x24) x=3; // LB/LBU
     if (opcode[i]==0x21||opcode[i]==0x25) x=2; // LH/LHU
@@ -3043,7 +3043,6 @@ static void store_assemble(int i,struct regstat *i_regs)
   else addr=s;
   if(!using_tlb) {
     #ifdef RAM_OFFSET
-    assert(0); // ARM64: ROREG register is 64bit
     map=get_reg(i_regs->regmap,ROREG);
     if(map<0) emit_loadreg(ROREG,map=HOST_TEMPREG);
     #endif
@@ -3072,6 +3071,7 @@ static void store_assemble(int i,struct regstat *i_regs)
       }
     }
   }else{ // using tlb
+    assert(0);
     int x=0;
     if (opcode[i]==0x28) x=3; // SB
     if (opcode[i]==0x29) x=2; // SH
@@ -3140,7 +3140,6 @@ static void store_assemble(int i,struct regstat *i_regs)
       addr=temp;
       #endif
       #if defined(HOST_IMM8)
-      assert(0); // ARM64: INVCP register is 64bit
       int ir=get_reg(i_regs->regmap,INVCP);
       assert(ir>=0);
       emit_cmpmem_indexedsr12_reg(ir,addr,1);
@@ -3148,7 +3147,6 @@ static void store_assemble(int i,struct regstat *i_regs)
       emit_cmpmem_indexedsr12_imm((int)invalid_code,addr,1);
       #endif
       #if defined(HAVE_CONDITIONAL_CALL) && !defined(DESTRUCTIVE_SHIFT)
-      assert(0); // ARM64: No conditional call but no destructive shift either
       emit_callne(invalidate_addr_reg[addr]);
       #else
       jaddr2=(int)out;

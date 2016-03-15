@@ -18,6 +18,25 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.          *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+typedef enum {
+  EQ,
+  NE,
+  CS,
+  CC,
+  MI,
+  PL,
+  VS,
+  VC,
+  HI,
+  LS,
+  GE,
+  LT,
+  GT,
+  LE,
+  AW,
+  NV
+} eCond;
+
 static void *dynamic_linker(void * src, u_int vaddr);
 static void *dynamic_linker_ds(void * src, u_int vaddr);
 static void invalidate_addr(u_int addr);
@@ -186,9 +205,16 @@ static uintptr_t jump_table_symbols[] = {
 };
 
 /* Linker */
-static void set_jump_target(int addr,u_int target)
+static void set_jump_target(intptr_t addr,uintptr_t target)
 {
-  assert(0);
+  //ARM64: conditional branch are limited to +/- 1MB
+  //block max size is 256k so branching beyond the +/- 1MB limit
+  //should only happen when jumping to an already compiled block (see add_link)
+  //a workaround would be to do a trampoline jump via a stub at the end of the block
+  int offset=addr-(intptr_t)target;
+  assert(offset>=-1048576&&offset<1048576);
+
+  /*assert(0);
   u_char *ptr=(u_char *)addr;
   u_int *ptr2=(u_int *)ptr;
   if(ptr[3]==0xe2) {
@@ -215,7 +241,7 @@ static void set_jump_target(int addr,u_int target)
   else {
     assert((ptr[3]&0x0e)==0xa);
     *ptr2=(*ptr2&0xFF000000)|(((target-(u_int)ptr2-8)<<6)>>8);
-  }
+  }*/
 }
 
 // This optionally copies the instruction from the target of the branch into
@@ -1227,6 +1253,13 @@ static u_int genjmp(uintptr_t addr)
   return ((u_int)offset>>2)&0x3ffffff;
 }
 
+static u_int gencondjmp(uintptr_t addr)
+{
+  if(addr<4) return 0;
+  int offset=addr-(intptr_t)out;
+  assert(offset>=-1048576&&offset<1048576);
+  return ((u_int)offset>>2)&0x7ffff;
+}
 
 /* TODO: remove 64bit compatibility if no 64bit immediate required */
 uint32_t count_trailing_zeros(uint64_t value)
@@ -1571,7 +1604,7 @@ static void emit_movimm(u_int imm,u_int rt)
     emit_movn_lsl16((~imm>>16),rt);
   }else if(genimm((uint64_t)imm,32,&armval)) {
     assem_debug("orr %s, wzr, #%d (0x%x)",regname[rt],imm,imm);
-    output_w32(0x32000000|armval<<10|ZR<<5|rt);
+    output_w32(0x32000000|armval<<10|WZR<<5|rt);
   }else{
     emit_movz_lsl16(imm>>16,rt);
     emit_movk(imm&0x0000FFFF,rt);
@@ -1587,15 +1620,21 @@ static void emit_pcreladdr(u_int rt)
 
 static void emit_loadreg(int r, int hr)
 {
-  //ARM64: load 64bit pointer 8bytes aligned
-  assert(r!=INVCP);
-  assert(r != ROREG);
-
   assert(hr<29);
   if((r&63)==0)
     emit_zeroreg(hr);
   else if(r==MMREG)
     emit_movimm(((intptr_t)memory_map-(intptr_t)&dynarec_local)>>2,hr);
+  else if(r==INVCP||r==ROREG){
+    intptr_t addr;
+    if(r==INVCP) addr=(intptr_t)&invc_ptr;
+    if(r==ROREG) addr=(intptr_t)&ram_offset;
+    u_int offset = addr-(uintptr_t)&dynarec_local;
+    assert(offset<4096);
+    assert(offset%8 == 0); /* 8 bytes aligned */
+    assem_debug("ldr %s,fp+%d",regname[hr],offset);
+    output_w32(0xf9400000|((offset>>3)<<10)|(FP<<5)|hr);
+  }
   else {
     intptr_t addr=((intptr_t)reg)+((r&63)<<3)+((r&64)>>4);
     if((r&63)==HIREG) addr=(intptr_t)&hi+((r&64)>>4);
@@ -1603,8 +1642,6 @@ static void emit_loadreg(int r, int hr)
     if(r==CCREG) addr=(intptr_t)&cycle_count;
     if(r==CSREG) addr=(intptr_t)&g_cp0_regs[CP0_STATUS_REG];
     if(r==FSREG) addr=(intptr_t)&FCR31;
-    if(r==INVCP) addr=(intptr_t)&invc_ptr;
-    if(r==ROREG) addr=(intptr_t)&ram_offset;
     u_int offset = addr-(uintptr_t)&dynarec_local;
     assert(offset<4096);
     assert(offset%4 == 0); /* 4 bytes aligned */
@@ -1687,12 +1724,11 @@ static void emit_or_and_set_flags(int rs1,int rs2,int rt)
 
 static void emit_xor(u_int rs1,u_int rs2,u_int rt)
 {
-  assert(0);
   assert(rs1<29);
   assert(rs2<29);
   assert(rt<29);
   assem_debug("eor %s,%s,%s",regname[rt],regname[rs1],regname[rs2]);
-  output_w32(0xe0200000|rd_rn_rm(rt,rs1,rs2));
+  output_w32(0x4a000000|rs2<<16|rs1<<5|rt);
 }
 
 static void emit_addimm64(u_int rs,int imm,u_int rt)
@@ -1706,7 +1742,7 @@ static void emit_addimm64(u_int rs,int imm,u_int rt)
 static void emit_addimm(u_int rs,int imm,u_int rt)
 {
   assert(rt<29);
-  assert(rs < 29);
+  assert(rs<29);
 
   if(imm!=0) {
     assert(imm>-65536&&imm<65536);
@@ -1923,13 +1959,12 @@ static void emit_shlimm(int rs,u_int imm,int rt)
 
 static void emit_shrimm(int rs,u_int imm,int rt)
 {
-  assert(0);
   assert(rs<29);
-  assert(rt<29);
+  assert(rt<29||rt==HOST_TEMPREG);
   assert(imm>0);
   assert(imm<32);
   assem_debug("lsr %s,%s,#%d",regname[rt],regname[rs],imm);
-  output_w32(0xe1a00000|rd_rn_rm(rt,0,rs)|0x20|(imm<<7));
+  output_w32(0x53007C00|imm<<16|rs<<5|rt);
 }
 
 static void emit_sarimm(int rs,u_int imm,int rt)
@@ -2036,33 +2071,33 @@ static void emit_orrshr(u_int rs,u_int shift,u_int rt)
 
 static void emit_cmpimm(int rs,int imm)
 {
-  assert(0);
-  assert(rs<29);
-  u_int armval;
-  if(genimm_(imm,&armval)) {
+  assert(rs<29||rs==HOST_TEMPREG);
+  if(imm<0&&imm>-4096) {
+    assem_debug("cmn %s,#%d",regname[rs],-imm);
+    output_w32(0x31000000|(-imm)<<10|rs<<5|WZR);
+  }else if(imm>0&&imm<4096) {
     assem_debug("cmp %s,#%d",regname[rs],imm);
-    output_w32(0xe3500000|rd_rn_rm(0,rs,0)|armval);
-  }else if(genimm_(-imm,&armval)) {
-    assem_debug("cmn %s,#%d",regname[rs],imm);
-    output_w32(0xe3700000|rd_rn_rm(0,rs,0)|armval);
-  }else if(imm>0) {
-    assert(imm<65536);
-    #ifdef ARMv5_ONLY
-    emit_movimm(imm,HOST_TEMPREG);
-    #else
-    emit_movw(imm,HOST_TEMPREG);
-    #endif
-    assem_debug("cmp %s,r14",regname[rs]);
-    output_w32(0xe1500000|rd_rn_rm(0,rs,HOST_TEMPREG));
-  }else{
-    assert(imm>-65536);
-    #ifdef ARMv5_ONLY
-    emit_movimm(-imm,HOST_TEMPREG);
-    #else
-    emit_movw(-imm,HOST_TEMPREG);
-    #endif
-    assem_debug("cmn %s,r14",regname[rs]);
-    output_w32(0xe1700000|rd_rn_rm(0,rs,HOST_TEMPREG));
+    output_w32(0x71000000|imm<<10|rs<<5|WZR);
+  }else if(imm<0) {
+    if((-imm&0xFFF)==0) {
+      assem_debug("cmn %s,#%d,lsl #12",regname[rs],-imm);
+      output_w32(0x31400000|(-imm>>12)<<10|rs<<5|WZR);
+    }else{
+      assert(imm>-65536);
+      emit_movz(-imm,HOST_TEMPREG);
+      assem_debug("cmn %s,%s",regname[rs],regname[HOST_TEMPREG]);
+      output_w32(0x2b000000|HOST_TEMPREG<<16|rs<<5|WZR);
+    }
+  }else {                                                                                                                                  
+    if((imm&0xFFF)==0) {
+      assem_debug("cmp %s,#%d,lsl #12",regname[rs],imm);
+      output_w32(0x71400000|(imm>>12)<<10|rs<<5|WZR);
+    }else{
+      assert(imm<65536);
+      emit_movz(imm,HOST_TEMPREG);
+      assem_debug("cmp %s,%s",regname[rs],regname[HOST_TEMPREG]);
+      output_w32(0x6b000000|HOST_TEMPREG<<16|rs<<5|WZR);
+    }
   }
 }
 
@@ -2313,83 +2348,72 @@ static void emit_call(intptr_t a)
   u_int offset=genjmp(a);
   output_w32(0x94000000|offset);
 }
-static void emit_jmp(int a)
+static void emit_jmp(intptr_t a)
 {
-  assert(0);
-  assem_debug("b %x (%x+%x)",a,(int)out,a-(int)out-8);
+  assem_debug("b %x (%x+%x)",a,(intptr_t)out,a-(intptr_t)out);
   u_int offset=genjmp(a);
-  output_w32(0xea000000|offset);
+  output_w32(0x14000000|offset);
 }
-static void emit_jne(int a)
+static void emit_jne(intptr_t a)
 {
-  assert(0);
   assem_debug("bne %x",a);
-  u_int offset=genjmp(a);
-  output_w32(0x1a000000|offset);
+  u_int offset=gencondjmp(a);
+  output_w32(0x54000000|offset<<5|NE);
 }
-static void emit_jeq(int a)
+static void emit_jeq(intptr_t a)
 {
-  assert(0);
   assem_debug("beq %x",a);
-  u_int offset=genjmp(a);
-  output_w32(0x0a000000|offset);
+  u_int offset=gencondjmp(a);
+  output_w32(0x54000000|offset<<5|EQ);
 }
-static void emit_js(int a)
+static void emit_js(intptr_t a)
 {
-  assert(0);
   assem_debug("bmi %x",a);
-  u_int offset=genjmp(a);
-  output_w32(0x4a000000|offset);
+  u_int offset=gencondjmp(a);
+  output_w32(0x54000000|offset<<5|MI);
 }
-static void emit_jns(int a)
+static void emit_jns(intptr_t a)
 {
-  assert(0);
   assem_debug("bpl %x",a);
-  u_int offset=genjmp(a);
-  output_w32(0x5a000000|offset);
+  u_int offset=gencondjmp(a);
+  output_w32(0x54000000|offset<<5|PL);
 }
-static void emit_jl(int a)
+static void emit_jl(intptr_t a)
 {
-  assert(0);
   assem_debug("blt %x",a);
-  u_int offset=genjmp(a);
-  output_w32(0xba000000|offset);
+  u_int offset=gencondjmp(a);
+  output_w32(0x54000000|offset<<5|LT);
 }
-static void emit_jge(int a)
+static void emit_jge(intptr_t a)
 {
-  assert(0);
   assem_debug("bge %x",a);
-  u_int offset=genjmp(a);
-  output_w32(0xaa000000|offset);
+  u_int offset=gencondjmp(a);
+  output_w32(0x54000000|offset<<5|GE);
 }
-static void emit_jno(int a)
+static void emit_jno(intptr_t a)
 {
-  assert(0);
   assem_debug("bvc %x",a);
-  u_int offset=genjmp(a);
-  output_w32(0x7a000000|offset);
+  u_int offset=gencondjmp(a);
+  output_w32(0x54000000|offset<<5|VC);
 }
 
-static void emit_jcc(int a)
+static void emit_jcc(intptr_t a)
 {
-  assert(0);
   assem_debug("bcc %x",a);
-  u_int offset=genjmp(a);
-  output_w32(0x3a000000|offset);
+  u_int offset=gencondjmp(a);
+  output_w32(0x54000000|offset<<5|CC);
 }
-static void emit_jae(int a)
+static void emit_jae(intptr_t a)
 {
-  assert(0);
   assem_debug("bcs %x",a);
-  u_int offset=genjmp(a);
-  output_w32(0x2a000000|offset);
+  u_int offset=gencondjmp(a);
+  output_w32(0x54000000|offset<<5|CS);
 }
-static void emit_jb(int a)
+static void emit_jb(intptr_t a)
 {
-  assert(0);
   assem_debug("bcc %x",a);
-  u_int offset=genjmp(a);
-  output_w32(0x3a000000|offset);
+  u_int offset=gencondjmp(a);
+  output_w32(0x54000000|offset<<5|CC);
 }
 
 static void emit_pushreg(u_int r)
@@ -2429,16 +2453,14 @@ static void emit_readword_indexed(int offset, int rs, int rt)
 }
 static void emit_readword_dualindexedx4(int rs1, int rs2, int rt)
 {
-  assert(0);
   assert(rs1<29);
   assert(rs2<29);
   assert(rt<29);
-  assem_debug("ldr %s,%s,%s lsl #2",regname[rt],regname[rs1],regname[rs2]);
-  output_w32(0xe7900000|rd_rn_rm(rt,rs1,rs2)|0x100);
+  assem_debug("ldr %s, [%s,%s lsl #2]",regname[rt],regname64[rs1],regname64[rs2]);
+  output_w32(0xb8607800|rs2<<16|rs1<<5|rt);
 }
 static void emit_readword_indexed_tlb(int addr, int rs, int map, int rt)
 {
-  assert(0);
   assert(rs<29);
   assert(map<29);
   assert(rt<29);
@@ -2631,16 +2653,14 @@ static void emit_writeword_indexed(int rt, int offset, int rs)
 }
 static void emit_writeword_dualindexedx4(int rt, int rs1, int rs2)
 {
-  assert(0);
   assert(rs1<29);
   assert(rs2<29);
   assert(rt<29);
-  assem_debug("str %s,%s,%s lsl #2",regname[rt],regname[rs1],regname[rs2]);
-  output_w32(0xe7800000|rd_rn_rm(rt,rs1,rs2)|0x100);
+  assem_debug("str %s,[%s,%s lsl #2]",regname[rt],regname64[rs1],regname64[rs2]);
+  output_w32(0xb8207800|rs2<<16|rs1<<5|rt);
 }
 static void emit_writeword_indexed_tlb(int rt, int addr, int rs, int map, int temp)
 {
-  assert(0);
   assert(rs<29);
   assert(map<29);
   assert(rt<29);
@@ -3037,11 +3057,11 @@ static void emit_cmpmem_indexedsr12_imm(int addr,int r,int imm)
 // special case for checking invalid_code
 static void emit_cmpmem_indexedsr12_reg(int base,int r,int imm)
 {
-  assert(0);
   assert(imm<128&&imm>=0);
   assert(r>=0&&r<29);
-  assem_debug("ldrb lr,%s,%s lsr #12",regname[base],regname[r]);
-  output_w32(0xe7d00000|rd_rn_rm(HOST_TEMPREG,base,r)|0x620);
+  emit_shrimm(r,12,HOST_TEMPREG);
+  assem_debug("ldrb %s,[%s,%s]",regname[HOST_TEMPREG],regname64[base],regname64[HOST_TEMPREG]);
+  output_w32(0x38606800|HOST_TEMPREG<<16|base<<5|HOST_TEMPREG);
   emit_cmpimm(HOST_TEMPREG,imm);
 }
 
@@ -3056,12 +3076,9 @@ static void emit_addsr12(int rs1,int rs2,int rt)
   output_w32(0xe0800620|rd_rn_rm(rt,rs1,rs2));
 }
 
-static void emit_callne(int a)
+static void emit_callne(intptr_t a)
 {
   assert(0);
-  assem_debug("blne %x",a);
-  u_int offset=genjmp(a);
-  output_w32(0x1b000000|offset);
 }
 
 #ifdef IMM_PREFETCH
