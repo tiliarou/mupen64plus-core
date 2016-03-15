@@ -2103,75 +2103,79 @@ static void emit_cmpimm(int rs,int imm)
 
 static void emit_cmovne_imm(int imm,int rt)
 {
-  assert(0);
+  assert(imm==0||imm==1);
   assert(rt<29);
-  assem_debug("movne %s,#%d",regname[rt],imm);
-  u_int armval, ret;
-  ret = genimm_(imm,&armval);
-  assert(ret);
-  output_w32(0x13a00000|rd_rn_rm(rt,0,0)|armval);
+  if(imm){
+    assem_debug("csinc %s,%s,%s,eq",regname[rt],regname[rt],regname[WZR]);
+    output_w32(0x1a800400|WZR<<16|EQ<<12|rt<<5|rt);
+  }else{
+    assem_debug("csel %s,%s,%s,ne",regname[rt],regname[WZR],regname[rt]);
+    output_w32(0x1a800000|rt<<16|NE<<12|WZR<<5|rt);
+  }
 }
 static void emit_cmovl_imm(int imm,int rt)
 {
-  assert(0);
+  assert(imm==0||imm==1);
   assert(rt<29);
-  assem_debug("movlt %s,#%d",regname[rt],imm);
-  u_int armval, ret;
-  ret = genimm_(imm,&armval);
-  assert(ret);
-  output_w32(0xb3a00000|rd_rn_rm(rt,0,0)|armval);
+  if(imm){
+    assem_debug("csinc %s,%s,%s,ge",regname[rt],regname[rt],regname[WZR]);
+    output_w32(0x1a800400|WZR<<16|GE<<12|rt<<5|rt);
+  }else{
+    assem_debug("csel %s,%s,%s,lt",regname[rt],regname[WZR],regname[rt]);
+    output_w32(0x1a800000|rt<<16|LT<<12|WZR<<5|rt);
+  }
 }
 static void emit_cmovb_imm(int imm,int rt)
 {
-  assert(0);
+  assert(imm==0||imm==1);
   assert(rt<29);
-  assem_debug("movcc %s,#%d",regname[rt],imm);
-  u_int armval, ret;
-  ret = genimm_(imm,&armval);
-  assert(ret);
-  output_w32(0x33a00000|rd_rn_rm(rt,0,0)|armval);
+  if(imm){
+    assem_debug("csinc %s,%s,%s,cs",regname[rt],regname[rt],regname[WZR]);
+    output_w32(0x1a800400|WZR<<16|CS<<12|rt<<5|rt);
+  }else{
+    assem_debug("csel %s,%s,%s,cc",regname[rt],regname[WZR],regname[rt]);
+    output_w32(0x1a800000|rt<<16|CC<<12|WZR<<5|rt);
+  }
 }
 static void emit_cmovs_imm(int imm,int rt)
 {
-  assert(0);
+  assert(imm==0||imm==1);
   assert(rt<29);
-  assem_debug("movmi %s,#%d",regname[rt],imm);
-  u_int armval, ret;
-  ret = genimm_(imm,&armval);
-  assert(ret);
-  output_w32(0x43a00000|rd_rn_rm(rt,0,0)|armval);
+  if(imm){
+    assem_debug("csinc %s,%s,%s,pl",regname[rt],regname[rt],regname[WZR]);
+    output_w32(0x1a800400|WZR<<16|PL<<12|rt<<5|rt);
+  }else{
+    assem_debug("csel %s,%s,%s,mi",regname[rt],regname[WZR],regname[rt]);
+    output_w32(0x1a800000|rt<<16|MI<<12|WZR<<5|rt);
+  }
 }
 static void emit_cmove_reg(int rs,int rt)
 {
-  assert(0);
   assert(rs<29);
   assert(rt<29);
-  assem_debug("moveq %s,%s",regname[rt],regname[rs]);
-  output_w32(0x01a00000|rd_rn_rm(rt,0,rs));
+  assem_debug("csel %s,%s,%s,eq",regname[rt],regname[rs],regname[rt]);
+  output_w32(0x1a800000|rt<<16|EQ<<12|rs<<5|rt);
 }
 static void emit_cmovne_reg(int rs,int rt)
 {
-  assert(0);
   assert(rs<29);
   assert(rt<29);
-  assem_debug("movne %s,%s",regname[rt],regname[rs]);
-  output_w32(0x11a00000|rd_rn_rm(rt,0,rs));
+  assem_debug("csel %s,%s,%s,ne",regname[rt],regname[rs],regname[rt]);
+  output_w32(0x1a800000|rt<<16|NE<<12|rs<<5|rt);
 }
 static void emit_cmovl_reg(int rs,int rt)
 {
-  assert(0);
   assert(rs<29);
   assert(rt<29);
-  assem_debug("movlt %s,%s",regname[rt],regname[rs]);
-  output_w32(0xb1a00000|rd_rn_rm(rt,0,rs));
+  assem_debug("csel %s,%s,%s,lt",regname[rt],regname[rs],regname[rt]);
+  output_w32(0x1a800000|rt<<16|LT<<12|rs<<5|rt);
 }
 static void emit_cmovs_reg(int rs,int rt)
 {
-  assert(0);
   assert(rs<29);
   assert(rt<29);
-  assem_debug("movmi %s,%s",regname[rt],regname[rs]);
-  output_w32(0x41a00000|rd_rn_rm(rt,0,rs));
+  assem_debug("csel %s,%s,%s,lt",regname[rt],regname[rs],regname[rt]);
+  output_w32(0x1a800000|rt<<16|MI<<12|rs<<5|rt);
 }
 
 static void emit_slti32(int rs,int imm,int rt)
@@ -3371,6 +3375,12 @@ static void emit_jno_unlikely(int a)
   //emit_jno(a);
   assem_debug("addvc pc,pc,#? (%x)",/*a-(int)out-8,*/a);
   output_w32(0x72800000|rd_rn_rm(15,15,0));
+}
+
+static void emit_breakpoint(u_int imm)
+{
+  assem_debug("brk #%d",imm);
+  output_w32(0xd4200000|imm<<5);
 }
 
 // Save registers before function call
