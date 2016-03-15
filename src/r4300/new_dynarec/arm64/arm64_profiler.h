@@ -75,7 +75,7 @@ static char invalid_code[0x100000];
 typedef struct
 {
   char extra_memory[33554432];
-  u_char dynarec_local[64];
+  u_char dynarec_local[256];
   uint32_t next_interupt;
   int cycle_count;
   int last_count;

@@ -45,7 +45,7 @@ BSS_SECTION
 
     .align 12
     GLOBAL_VARIABLE(extra_memory, 33554432)
-    GLOBAL_VARIABLE(dynarec_local, 64)
+    GLOBAL_VARIABLE(dynarec_local, 256)
     GLOBAL_VARIABLE(next_interupt, 4)
     GLOBAL_VARIABLE(cycle_count, 4)
     GLOBAL_VARIABLE(last_count, 4)
@@ -77,10 +77,10 @@ BSS_SECTION
     GLOBAL_VARIABLE(memory_map, 8388608)
 
 extra_memory:
-    .space    33554432+64+4+4+4+4+4+4+8+8+8+8+4+2+4+4+4+256+8+8+128+256+256+16+8+8+192+8+256+512+8388608
+    .space    33554432+256+4+4+4+4+4+4+8+8+8+8+4+2+4+4+4+256+8+8+128+256+256+16+8+8+192+8+256+512+8388608
 
     dynarec_local     = extra_memory      + 33554432
-    next_interupt     = dynarec_local     + 64
+    next_interupt     = dynarec_local     + 256
     cycle_count       = next_interupt     + 4
     last_count        = cycle_count       + 4
     pending_exception = last_count        + 4
