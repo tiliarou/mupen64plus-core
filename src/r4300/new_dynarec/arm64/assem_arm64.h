@@ -33,6 +33,7 @@
 #define FP 29
 #define LR 30
 #define WZR 31
+#define XZR WZR
 #define HOST_TEMPREG 30
 
 // Note: FP is set to &dynarec_local when executing generated code.

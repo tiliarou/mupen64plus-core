@@ -252,7 +252,7 @@ void profiler_block(int addr)
 
   if(handle == 0) return;
 
-  fprintf(pFile, "Recompiled block: %.8x\n", addr);
+  fprintf(pFile, "Recompiled block: 0x%.8x\n", addr);
   beginning=(uint32_t *)out;
   new_recompile_block(addr);
   end=(uint32_t *)out;
@@ -264,7 +264,7 @@ void profiler_block(int addr)
   if(count <= 0) return;
 
   for (uint32_t i = 0; i < count; i++) {
-    printf("0x%.8x: %s %s\n", (uintptr_t)insn[i].address, insn[i].mnemonic, insn[i].op_str);
+    printf("0x%x: %s %s\n", (uintptr_t)insn[i].address, insn[i].mnemonic, insn[i].op_str);
     sum += insn[i].size;
  #if NEW_DYNAREC_PROFILER >= NEW_DYNAREC_ARM
     if(INSTRUCTION.operands[1].reg == FP_REGISTER) {
@@ -284,7 +284,7 @@ void profiler_block(int addr)
           break;
       }
       if(j < 30) {
-        fprintf(pFile, "0x%.8x: %s %s (%s+%d)\n", (uintptr_t)insn[i].address, insn[i].mnemonic, insn[i].op_str, var[j].name, imm - (var[j].addr - (uintptr_t)&dynarec_local));
+        fprintf(pFile, "0x%x: %s %s (%s+%d)\n", (uintptr_t)insn[i].address, insn[i].mnemonic, insn[i].op_str, var[j].name, imm - (var[j].addr - (uintptr_t)&dynarec_local));
         continue;
       }
     }
@@ -301,11 +301,11 @@ void profiler_block(int addr)
           break;
       }
       if(j < 121) {
-        fprintf(pFile, "0x%.8x: %s %s (%s)\n", (uintptr_t)insn[i].address, insn[i].mnemonic, insn[i].op_str, func[j].name);
+        fprintf(pFile, "0x%x: %s %s (%s)\n", (uintptr_t)insn[i].address, insn[i].mnemonic, insn[i].op_str, func[j].name);
         continue;
       }
     }
-    fprintf(pFile, "0x%.8x: %s %s\n", (uintptr_t)insn[i].address, insn[i].mnemonic, insn[i].op_str);
+    fprintf(pFile, "0x%x: %s %s\n", (uintptr_t)insn[i].address, insn[i].mnemonic, insn[i].op_str);
   }
 
   if(size != sum)
