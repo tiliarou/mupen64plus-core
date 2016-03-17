@@ -2462,9 +2462,8 @@ static void emit_callreg(u_int r)
 }*/
 static void emit_jmpreg(u_int r)
 {
-  assert(0);
-  assem_debug("mov pc,%s",regname[r]);
-  output_w32(0xe1a00000|rd_rn_rm(15,0,r));
+  assem_debug("br %s",regname64[r]);
+  output_w32(0xd61f0000|r<<5);
 }
 static void emit_readword_indexed(int offset, int rs, int rt)
 {
@@ -3031,17 +3030,22 @@ static void emit_rsbimm(int rs, int imm, int rt)
 // Load 2 immediates optimizing for small code size
 static void emit_mov2imm_compact(int imm1,u_int rt1,int imm2,u_int rt2)
 {
-  assert(0);
   assert(rt1!=29);
   assert(rt2!=29);
   emit_movimm(imm1,rt1);
-  u_int armval;
-  if(genimm_(imm2-imm1,&armval)) {
-    assem_debug("add %s,%s,#%d",regname[rt2],regname[rt1],imm2-imm1);
-    output_w32(0xe2800000|rd_rn_rm(rt2,rt1,0)|armval);
-  }else if(genimm_(imm1-imm2,&armval)) {
-    assem_debug("sub %s,%s,#%d",regname[rt2],regname[rt1],imm1-imm2);
-    output_w32(0xe2400000|rd_rn_rm(rt2,rt1,0)|armval);
+  int imm=imm2-imm1;
+  if(imm<0&&imm>-4096) {
+    assem_debug("sub %s, %s, #%d",regname[rt2],regname[rt1],-imm&0xfff);
+    output_w32(0x51000000|((-imm)&0xfff)<<10|rt1<<5|rt2);
+  }else if(imm>=0&&imm<4096) {
+    assem_debug("add %s, %s, #%d",regname[rt2],regname[rt1],imm&0xfff);
+    output_w32(0x11000000|(imm&0xfff)<<10|rt1<<5|rt2);
+  }else if(imm<0&&(-imm&0xfff)==0) {
+    assem_debug("sub %s, %s, #%d lsl #%d",regname[rt2],regname[rt1],((-imm)>>12)&0xfff,12);
+    output_w32(0x51400000|(((-imm)>>12)&0xfff)<<10|rt1<<5|rt2);
+  }else if(imm>=0&&(imm&0xfff)==0) {
+    assem_debug("add %s, %s, #%d lsl #%d",regname[rt2],regname[rt1],(imm>>12)&0xfff,12);
+    output_w32(0x11400000|((imm>>12)&0xfff)<<10|rt1<<5|rt2);
   }
   else emit_movimm(imm2,rt2);
 }
@@ -3551,10 +3555,10 @@ static void emit_extjump2(intptr_t addr, int target, intptr_t linker)
   emit_movz_lsl16((target>>16)&0xffff,1);
   emit_movk(target&0xffff,1);
 
-  emit_movz64_lsl48((addr>>48)&0xffff,0);
-  emit_movk64_lsl32((addr>>32)&0xffff,0);
-  emit_movk64_lsl16((addr>>16)&0xffff,0);
-  emit_movk64(addr&0xffff,0);
+  emit_movz64_lsl48(((uint64_t)addr>>48)&0xffff,0);
+  emit_movk64_lsl32(((uint64_t)addr>>32)&0xffff,0);
+  emit_movk64_lsl16(((uint64_t)addr>>16)&0xffff,0);
+  emit_movk64((uint64_t)addr&0xffff,0);
 
 #ifdef DEBUG_CYCLE_COUNT
   emit_readword((intptr_t)&last_count,ECX);
@@ -3929,27 +3933,33 @@ static void do_invstub(int n)
   emit_jmp(stubs[n][2]); // return address
 }
 
-static int do_dirty_stub(int i)
+static intptr_t do_dirty_stub(int i)
 {
-  assert(0);
   assem_debug("do_dirty_stub %x",start+i*4);
+
   // Careful about the code output here, verify_dirty needs to parse it.
-  #ifdef ARMv5_ONLY
-  emit_loadlp((int)start<(int)0xC0000000?(int)source:(int)start,1);
-  emit_loadlp((int)copy,2);
-  emit_loadlp(slen*4,3);
-  #else
-  emit_movw(((int)start<(int)0xC0000000?(u_int)source:(u_int)start)&0x0000FFFF,1);
-  emit_movw(((u_int)copy)&0x0000FFFF,2);
-  emit_movt(((int)start<(int)0xC0000000?(u_int)source:(u_int)start)&0xFFFF0000,1);
-  emit_movt(((u_int)copy)&0xFFFF0000,2);
-  emit_movw(slen*4,3);
-  #endif
+  if((int)start<(int)0xC0000000){
+    emit_movz64_lsl48((((uint64_t)source)>>48)&0xffff,0);
+    emit_movk64_lsl32((((uint64_t)source)>>32)&0xffff,0);
+    emit_movk64_lsl16((((uint64_t)source)>>16)&0xffff,0);
+    emit_movk64(((uint64_t)source)&0xffff,0);
+  }else{
+    assert(0);
+    emit_movz_lsl16(((u_int)start>>16)&0xffff,1);
+    emit_movk(((u_int)start)&0xffff,1);
+  }
+
+  emit_movz64_lsl48((((uint64_t)copy)>>48)&0xffff,0);
+  emit_movk64_lsl32((((uint64_t)copy)>>32)&0xffff,0);
+  emit_movk64_lsl16((((uint64_t)copy)>>16)&0xffff,0);
+  emit_movk64(((uint64_t)copy)&0xffff,0);
+
+  emit_movz(slen*4,3);
   emit_movimm(start+i*4,0);
-  emit_call((int)start<(int)0xC0000000?(int)&verify_code:(int)&verify_code_vm);
-  int entry=(int)out;
+  emit_call((int)start<(int)0xC0000000?(intptr_t)&verify_code:(intptr_t)&verify_code_vm);
+  intptr_t entry=(intptr_t)out;
   load_regs_entry(i);
-  if(entry==(int)out) entry=instr_addr[i];
+  if(entry==(intptr_t)out) entry=instr_addr[i];
   emit_jmp(instr_addr[i]);
   return entry;
 }
