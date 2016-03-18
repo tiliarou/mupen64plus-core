@@ -319,6 +319,7 @@ static void *dynamic_linker(void * src, u_int vaddr)
       assert((*(int*)((u_int)ptr2+16)&0x0f000000)==0x0b000000); //bl
       assert((*(int*)((u_int)ptr2+20)&0x0ff00000)==0x01a00000); //mov
 #endif
+      //TOBEDONE: Disable link between blocks for conditional branches
       add_link(vaddr, ptr2);
       *ptr=(*ptr&0xFF000000)|((((u_int)head->addr-(u_int)ptr-8)<<6)>>8);
       __clear_cache((void*)ptr, (void*)((u_int)ptr+4));
@@ -340,11 +341,11 @@ static void *dynamic_linker(void * src, u_int vaddr)
         if(verify_dirty(head->addr)) {
           //DebugMessage(M64MSG_VERBOSE, "restore candidate: %x (%d) d=%d",vaddr,page,invalid_code[vaddr>>12]);
           invalid_code[vaddr>>12]=0;
-          memory_map[vaddr>>12]|=0x40000000;
+          memory_map[vaddr>>12]|=WRITE_PROTECT;
           if(vpage<2048) {
             if(tlb_LUT_r[vaddr>>12]) {
               invalid_code[tlb_LUT_r[vaddr>>12]>>12]=0;
-              memory_map[tlb_LUT_r[vaddr>>12]>>12]|=0x40000000;
+              memory_map[tlb_LUT_r[vaddr>>12]>>12]|=WRITE_PROTECT;
             }
             restore_candidate[vpage>>3]|=1<<(vpage&7);
           }
@@ -410,6 +411,7 @@ static void *dynamic_linker_ds(void * src, u_int vaddr)
       assert((*(int*)((u_int)ptr2+16)&0x0f000000)==0x0b000000); //bl
       assert((*(int*)((u_int)ptr2+20)&0x0ff00000)==0x01a00000); //mov
 #endif
+      //TOBEDONE: Disable link between blocks for conditional branches
       add_link(vaddr, ptr2);
       *ptr=(*ptr&0xFF000000)|((((u_int)head->addr-(u_int)ptr-8)<<6)>>8);
       __clear_cache((void*)ptr, (void*)((u_int)ptr+4));
@@ -431,11 +433,11 @@ static void *dynamic_linker_ds(void * src, u_int vaddr)
         if(verify_dirty(head->addr)) {
           //DebugMessage(M64MSG_VERBOSE, "restore candidate: %x (%d) d=%d",vaddr,page,invalid_code[vaddr>>12]);
           invalid_code[vaddr>>12]=0;
-          memory_map[vaddr>>12]|=0x40000000;
+          memory_map[vaddr>>12]|=WRITE_PROTECT;
           if(vpage<2048) {
             if(tlb_LUT_r[vaddr>>12]) {
               invalid_code[tlb_LUT_r[vaddr>>12]>>12]=0;
-              memory_map[tlb_LUT_r[vaddr>>12]>>12]|=0x40000000;
+              memory_map[tlb_LUT_r[vaddr>>12]>>12]|=WRITE_PROTECT;
             }
             restore_candidate[vpage>>3]|=1<<(vpage&7);
           }
@@ -500,7 +502,7 @@ static void *kill_pointer(void *stub)
   return i_ptr;
 }
 
-static int get_pointer(void *stub)
+static intptr_t get_pointer(void *stub)
 {
   assert(0);
 #ifdef ARMv5_ONLY
@@ -522,7 +524,7 @@ static int get_pointer(void *stub)
 
 // Find the "clean" entry point from a "dirty" entry point
 // by skipping past the call to verify_code
-static u_int get_clean_addr(int addr)
+static uintptr_t get_clean_addr(intptr_t addr)
 {
   assert(0);
   int *ptr=(int *)addr;
@@ -537,7 +539,7 @@ static u_int get_clean_addr(int addr)
   if((*ptr&0xFF000000)==0xea000000) {
     return (int)ptr+((*ptr<<8)>>6)+8; // follow jump
   }
-  return (u_int)ptr;
+  return (uintptr_t)ptr;
 }
 
 static int verify_dirty(void *addr)
@@ -572,6 +574,7 @@ static int verify_dirty(void *addr)
   assert(verifier==(u_int)verify_code||verifier==(u_int)verify_code_vm||verifier==(u_int)verify_code_ds);
 
   if(verifier==(u_int)verify_code_vm||verifier==(u_int)verify_code_ds) {
+    assert(0); //TOBEDONE
     unsigned int page=source>>12;
     unsigned int map_value=memory_map[page];
     if(map_value>=0x80000000) return 0;
@@ -586,7 +589,7 @@ static int verify_dirty(void *addr)
 
 // This doesn't necessarily find all clean entry points, just
 // guarantees that it's not dirty
-static int isclean(int addr)
+static int isclean(intptr_t addr)
 {
   assert(0);
   #ifdef ARMv5_ONLY
@@ -607,7 +610,7 @@ static int isclean(int addr)
   return 1;
 }
 
-static void get_bounds(int addr,u_int *start,u_int *end)
+static void get_bounds(int addr,uintptr_t *start,uintptr_t *end)
 {
   assert(0);
   u_int *ptr=(u_int *)addr;
@@ -639,6 +642,7 @@ static void get_bounds(int addr,u_int *start,u_int *end)
   assert(verifier==(u_int)verify_code||verifier==(u_int)verify_code_vm||verifier==(u_int)verify_code_ds);
 
   if(verifier==(u_int)verify_code_vm||verifier==(u_int)verify_code_ds) {
+    assert(0); //TOBEDONE
     if(memory_map[source>>12]>=0x80000000) source = 0;
     else source = source+(memory_map[source>>12]<<2);
   }
@@ -3911,7 +3915,7 @@ static void inline_writestub(int type, int i, u_int addr, signed char regmap[], 
 static void do_unalignedwritestub(int n)
 {
   assert(0);
-  set_jump_target(stubs[n][1],(int)out);
+  set_jump_target(stubs[n][1],(intptr_t)out);
   output_w32(0xef000000);
   emit_jmp(stubs[n][2]); // return address
 }
@@ -3988,7 +3992,7 @@ static void do_cop1stub(int n)
   assert(0);
   literal_pool(256);
   assem_debug("do_cop1stub %x",start+stubs[n][3]*4);
-  set_jump_target(stubs[n][1],(int)out);
+  set_jump_target(stubs[n][1],(intptr_t)out);
   int i=stubs[n][3];
   int rs=stubs[n][4];
   struct regstat *i_regs=(struct regstat *)stubs[n][5];
@@ -4303,9 +4307,9 @@ static void loadlr_assemble_arm(int i,struct regstat *i_regs)
   }
   if (opcode[i]==0x22||opcode[i]==0x26) { // LWL/LWR
     if(!c||memtarget) {
-      //emit_readword_indexed((int)g_rdram-0x80000000,temp2,temp2);
+      //emit_readword_indexed((intptr_t)g_rdram-0x80000000,temp2,temp2);
       emit_readword_indexed_tlb(0,temp2,map,temp2);
-      if(jaddr) add_stub(LOADW_STUB,jaddr,(intptr_t)out,i,temp2,(int)i_regs,ccadj[i],reglist);
+      if(jaddr) add_stub(LOADW_STUB,jaddr,(intptr_t)out,i,temp2,(intptr_t)i_regs,ccadj[i],reglist);
     }
     else
       inline_readstub(LOADW_STUB,i,(constmap[i][s]+offset)&0xFFFFFFFC,i_regs->regmap,FTEMP,ccadj[i],reglist);
@@ -4332,10 +4336,10 @@ static void loadlr_assemble_arm(int i,struct regstat *i_regs)
   if (opcode[i]==0x1A||opcode[i]==0x1B) { // LDL/LDR
     int temp2h=get_reg(i_regs->regmap,FTEMP|64);
     if(!c||memtarget) {
-      //if(th>=0) emit_readword_indexed((int)g_rdram-0x80000000,temp2,temp2h);
-      //emit_readword_indexed((int)g_rdram-0x7FFFFFFC,temp2,temp2);
+      //if(th>=0) emit_readword_indexed((intptr_t)g_rdram-0x80000000,temp2,temp2h);
+      //emit_readword_indexed((intptr_t)g_rdram-0x7FFFFFFC,temp2,temp2);
       emit_readdword_indexed_tlb(0,temp2,map,temp2h,temp2);
-      if(jaddr) add_stub(LOADD_STUB,jaddr,(intptr_t)out,i,temp2,(int)i_regs,ccadj[i],reglist);
+      if(jaddr) add_stub(LOADD_STUB,jaddr,(intptr_t)out,i,temp2,(intptr_t)i_regs,ccadj[i],reglist);
     }
     else
       inline_readstub(LOADD_STUB,i,(constmap[i][s]+offset)&0xFFFFFFF8,i_regs->regmap,FTEMP,ccadj[i],reglist);
@@ -4490,7 +4494,7 @@ static void cop1_assemble(int i,struct regstat *i_regs)
     emit_testimm(rs,0x20000000);
     int jaddr=(int)out;
     emit_jeq(0);
-    add_stub(FP_STUB,jaddr,(int)out,i,rs,(int)i_regs,is_delayslot,0);
+    add_stub(FP_STUB,jaddr,(intptr_t)out,i,rs,(intptr_t)i_regs,is_delayslot,0);
     cop1_usable=1;
   }
   if (opcode2[i]==0) { // MFC1
@@ -4561,7 +4565,7 @@ static void fconv_assemble_arm(int i,struct regstat *i_regs)
     emit_testimm(rs,0x20000000);
     int jaddr=(int)out;
     emit_jeq(0);
-    add_stub(FP_STUB,jaddr,(int)out,i,rs,(int)i_regs,is_delayslot,0);
+    add_stub(FP_STUB,jaddr,(intptr_t)out,i,rs,(intptr_t)i_regs,is_delayslot,0);
     cop1_usable=1;
   }
   
@@ -4780,7 +4784,7 @@ static void fcomp_assemble(int i,struct regstat *i_regs)
     emit_testimm(cs,0x20000000);
     int jaddr=(int)out;
     emit_jeq(0);
-    add_stub(FP_STUB,jaddr,(int)out,i,cs,(int)i_regs,is_delayslot,0);
+    add_stub(FP_STUB,jaddr,(intptr_t)out,i,cs,(intptr_t)i_regs,is_delayslot,0);
     cop1_usable=1;
   }
   
@@ -4908,7 +4912,7 @@ static void float_assemble(int i,struct regstat *i_regs)
     emit_testimm(cs,0x20000000);
     int jaddr=(int)out;
     emit_jeq(0);
-    add_stub(FP_STUB,jaddr,(int)out,i,cs,(int)i_regs,is_delayslot,0);
+    add_stub(FP_STUB,jaddr,(intptr_t)out,i,cs,(intptr_t)i_regs,is_delayslot,0);
     cop1_usable=1;
   }
   
@@ -5388,17 +5392,17 @@ static void do_miniht_insert(u_int return_address,int rt,int temp) {
   assert(0);
   #ifdef ARMv5_ONLY
   emit_movimm(return_address,rt); // PC into link register
-  add_to_linker((int)out,return_address,1);
+  add_to_linker((intptr_t)out,return_address,1);
   emit_pcreladdr(temp);
-  emit_writeword(rt,(int)&mini_ht[(return_address&0xFF)>>3][0]);
-  emit_writeword(temp,(int)&mini_ht[(return_address&0xFF)>>3][1]);
+  emit_writeword(rt,(intptr_t)&mini_ht[(return_address&0xFF)>>3][0]);
+  emit_writeword(temp,(intptr_t)&mini_ht[(return_address&0xFF)>>3][1]);
   #else
   emit_movw(return_address&0x0000FFFF,rt);
-  add_to_linker((int)out,return_address,1);
+  add_to_linker((intptr_t)out,return_address,1);
   emit_pcreladdr(temp);
-  emit_writeword(temp,(int)&mini_ht[(return_address&0xFF)>>3][1]);
+  emit_writeword(temp,(intptr_t)&mini_ht[(return_address&0xFF)>>3][1]);
   emit_movt(return_address&0xFFFF0000,rt);
-  emit_writeword(rt,(int)&mini_ht[(return_address&0xFF)>>3][0]);
+  emit_writeword(rt,(intptr_t)&mini_ht[(return_address&0xFF)>>3][0]);
   #endif
 }
 
