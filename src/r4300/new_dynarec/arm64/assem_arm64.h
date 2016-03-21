@@ -15,8 +15,8 @@
 #define RAM_OFFSET 1
 
 /* ARM calling convention:
-   r0-r18: caller-save
-   r19-r28: callee-save */
+   x0-x18: caller-save
+   x19-x28: callee-save */
 
 #define ARG1_REG 0
 #define ARG2_REG 1
@@ -24,11 +24,11 @@
 #define ARG4_REG 3
 
 /* GCC register naming convention:
-   r16 = ip0 (scratch)
-   r17 = ip1 (scratch)
-   r29 = fp (frame pointer)
-   r30 = lr (link register)
-   r31 = sp (stack pointer) */
+   x16 = ip0 (scratch)
+   x17 = ip1 (scratch)
+   x29 = fp (frame pointer)
+   x30 = lr (link register)
+   x31 = sp (stack pointer) */
 
 #define FP 29
 #define LR 30

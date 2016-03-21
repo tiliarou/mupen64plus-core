@@ -1647,6 +1647,7 @@ static void emit_movimm(u_int imm,u_int rt)
   }
 }
 static void emit_movimm64(uint64_t imm,u_int rt){
+  assert(0);
   uint32_t armval=0;
   if(genimm(imm,64,&armval)){
     assem_debug("orr %s, xzr, #%d (0x%x)",regname64[rt],imm,imm);
@@ -1675,7 +1676,7 @@ static void emit_loadreg(int r, int hr)
   else if(r==MMREG)
     emit_movimm(((intptr_t)memory_map-(intptr_t)&dynarec_local)>>2,hr);
   else if(r==INVCP||r==ROREG){
-    intptr_t addr;
+    intptr_t addr=0;
     if(r==INVCP) addr=(intptr_t)&invc_ptr;
     if(r==ROREG) addr=(intptr_t)&ram_offset;
     u_int offset = addr-(uintptr_t)&dynarec_local;
@@ -1862,10 +1863,11 @@ static void emit_addimm_no_flags(u_int imm,u_int rt)
 
 static void emit_addnop(u_int r)
 {
-  assert(0);
   assert(r!=29);
-  assem_debug("add %s,%s,#0 (nop)",regname[r],regname[r]);
-  output_w32(0xe2800000|rd_rn_rm(r,r,0));
+  assem_debug("nop");
+  output_w32(0xd503201f);
+  /*assem_debug("add %s,%s,#0 (nop)",regname[r],regname[r]);
+  output_w32(0x11000000|r<<5|r);*/
 }
 
 static void emit_adcimm(u_int rs,int imm,u_int rt)
@@ -3424,6 +3426,31 @@ static void emit_breakpoint(u_int imm)
   output_w32(0xd4200000|imm<<5);
 }
 
+static void emit_adr(intptr_t addr, int rt)
+{
+  int offset=addr-(intptr_t)out;
+  assert(offset>=-1048576&&offset<1048576);
+  assem_debug("adr #%d",offset);
+  output_w32(0x10000000|((u_int)offset&0x3)<<29|(((u_int)offset>>2)&0x7ffff)<<5|rt);
+}
+
+static void emit_read_ptr(intptr_t addr, int rt)
+{
+  int offset=addr-(intptr_t)out;
+  if(offset>=-1048576&&offset<1048576){
+    assem_debug("adr #%d",offset);
+    output_w32(0x10000000|((u_int)offset&0x3)<<29|(((u_int)offset>>2)&0x7ffff)<<5|rt);
+  }
+  else{
+    offset/=4096;
+    assem_debug("adrp #%d",offset);
+    output_w32(0x90000000|((u_int)offset&0x3)<<29|(((u_int)offset>>2)&0x7ffff)<<5|rt);
+    if((addr&0xfff)!=0)
+      assem_debug("add %s, %s, #%d",regname64[rt],regname64[rt],addr&0xfff);
+      output_w32(0x91000000|(addr&0xfff)<<10|rt<<5|rt);
+  }
+}
+
 // Save registers before function call
 static void save_regs(u_int reglist)
 {
@@ -3431,19 +3458,20 @@ static void save_regs(u_int reglist)
   int index=0;
   int offset=0;
 
-  reglist&=0x7ffff; // only save the caller-save registers, r0-r18
+  reglist&=0x7ffff; // only save the caller-save registers, x0-x18
   if(!reglist) return;
 
-  for(int i=0; reglist!=0; i++){
+  int i;
+  for(i=0; reglist!=0; i++){
     if(reglist&1){
       rt[index]=i;
       index++;
     }
     if(index>1){
-      assert(offset>=0&&offset<256);
-      assem_debug("stp %s,%s,[fp+#%d]",regname[rt[0]],regname[rt[1]],offset);
-      output_w32(0x29000000|(offset>>2)<<15|rt[1]<<10|FP<<5|rt[0]);
-      offset+=8;
+      assert(offset>=0&&offset<=136);
+      assem_debug("stp %s,%s,[fp+#%d]",regname64[rt[0]],regname64[rt[1]],offset);
+      output_w32(0xa9000000|(offset>>3)<<15|rt[1]<<10|FP<<5|rt[0]);
+      offset+=16;
       index=0;
     }
     reglist>>=1;
@@ -3451,9 +3479,9 @@ static void save_regs(u_int reglist)
 
   if(index!=0) {
     assert(index==1);
-    assert(offset>=0&&offset<256);
-    assem_debug("str %s,[fp+#%d]",regname[rt[0]],offset);
-    output_w32(0xb9000000|(offset>>2)<<10|FP<<5|rt[0]);
+    assert(offset>=0&&offset<=144);
+    assem_debug("str %s,[fp+#%d]",regname64[rt[0]],offset);
+    output_w32(0xf9000000|(offset>>3)<<10|FP<<5|rt[0]);
   }
 }
 // Restore registers after function call
@@ -3463,19 +3491,20 @@ static void restore_regs(u_int reglist)
   int index=0;
   int offset=0;
 
-  reglist&=0x7ffff; // only restore the caller-save registers, r0-r18
+  reglist&=0x7ffff; // only restore the caller-save registers, x0-x18
   if(!reglist) return;
 
-  for(int i=0; reglist!=0; i++){
+  int i;
+  for(i=0; reglist!=0; i++){
     if(reglist&1){
       rt[index]=i;
       index++;
     }
     if(index>1){
-      assert(offset>=0&&offset<256);
+      assert(offset>=0&&offset<=136);
       assem_debug("ldp %s,%s,[fp+#%d]",regname[rt[0]],regname[rt[1]],offset);
-      output_w32(0x29400000|(offset>>2)<<15|rt[1]<<10|FP<<5|rt[0]);
-      offset+=8;
+      output_w32(0xa9400000|(offset>>3)<<15|rt[1]<<10|FP<<5|rt[0]);
+      offset+=16;
       index=0;
     }
     reglist>>=1;
@@ -3483,9 +3512,9 @@ static void restore_regs(u_int reglist)
 
   if(index!=0) {
     assert(index==1);
-    assert(offset>=0&&offset<256);
+    assert(offset>=0&&offset<=144);
     assem_debug("ldr %s,[fp+#%d]",regname[rt[0]],offset);
-    output_w32(0xb9400000|(offset>>2)<<10|FP<<5|rt[0]);
+    output_w32(0xf9400000|(offset>>3)<<10|FP<<5|rt[0]);
   }
 }
 
@@ -3556,13 +3585,12 @@ static void emit_extjump2(intptr_t addr, int target, intptr_t linker)
   u_char *ptr=(u_char *)addr;
   assert(ptr[3]==0x14);
 
-  emit_movz_lsl16((target>>16)&0xffff,1);
-  emit_movk(target&0xffff,1);
+  emit_movz_lsl16(((u_int)target>>16)&0xffff,1);
+  emit_movk((u_int)target&0xffff,1);
 
-  emit_movz64_lsl48(((uint64_t)addr>>48)&0xffff,0);
-  emit_movk64_lsl32(((uint64_t)addr>>32)&0xffff,0);
-  emit_movk64_lsl16(((uint64_t)addr>>16)&0xffff,0);
-  emit_movk64((uint64_t)addr&0xffff,0);
+  //addr is in the current recompiled block (max 256k)
+  //offset shouldn't exceed +/-1MB 
+  emit_adr(addr,0);
 
 #ifdef DEBUG_CYCLE_COUNT
   emit_readword((intptr_t)&last_count,ECX);
@@ -3633,7 +3661,7 @@ static void do_readstub(int n)
   if(cc<0) {
     emit_loadreg(CCREG,2);
   }
-  emit_movimm64(ftable,0);
+  emit_read_ptr(ftable,0);
   emit_addimm(cc<0?2:cc,2*stubs[n][6]+2,2);
   emit_movimm(start+stubs[n][3]*4+(((regs[i].was32>>rs1[i])&1)<<1)+ds,3);
   //emit_readword((int)&last_count,temp);
@@ -3815,7 +3843,7 @@ static void do_writestub(int n)
   if(cc<0) {
     emit_loadreg(CCREG,2);
   }
-  emit_movimm64(ftable,0);
+  emit_read_ptr(ftable,0);
   emit_addimm(cc<0?2:cc,2*stubs[n][6]+2,2);
   emit_movimm(start+stubs[n][3]*4+(((regs[i].was32>>rs1[i])&1)<<1)+ds,3);
   //emit_readword((int)&last_count,temp);
@@ -3941,22 +3969,16 @@ static intptr_t do_dirty_stub(int i)
 {
   assem_debug("do_dirty_stub %x",start+i*4);
 
-  // Careful about the code output here, verify_dirty needs to parse it.
+  // Careful about the code output here, verify_dirty and get_bounds needs to parse it.
   if((int)start<(int)0xC0000000){
-    emit_movz64_lsl48((((uint64_t)source)>>48)&0xffff,0);
-    emit_movk64_lsl32((((uint64_t)source)>>32)&0xffff,0);
-    emit_movk64_lsl16((((uint64_t)source)>>16)&0xffff,0);
-    emit_movk64(((uint64_t)source)&0xffff,0);
+    emit_read_ptr((intptr_t)source,1);
   }else{
     assert(0);
     emit_movz_lsl16(((u_int)start>>16)&0xffff,1);
     emit_movk(((u_int)start)&0xffff,1);
   }
 
-  emit_movz64_lsl48((((uint64_t)copy)>>48)&0xffff,0);
-  emit_movk64_lsl32((((uint64_t)copy)>>32)&0xffff,0);
-  emit_movk64_lsl16((((uint64_t)copy)>>16)&0xffff,0);
-  emit_movk64(((uint64_t)copy)&0xffff,0);
+  emit_read_ptr((intptr_t)copy,2);
 
   emit_movz(slen*4,3);
   emit_movimm(start+i*4,0);
@@ -3971,7 +3993,7 @@ static intptr_t do_dirty_stub(int i)
 static void do_dirty_stub_ds(void)
 {
   assert(0);
-  // Careful about the code output here, verify_dirty needs to parse it.
+  // Careful about the code output here, verify_dirty and get_bounds needs to parse it.
   #ifdef ARMv5_ONLY
   emit_loadlp((int)start<(int)0xC0000000?(int)source:(int)start,1);
   emit_loadlp((int)copy,2);
@@ -4039,7 +4061,7 @@ static int do_tlb_r(int s,int ar,int map,int cache,int x,int a,int shift,int c,u
   }
   return map;
 }
-static int do_tlb_r_branch(int map, int c, u_int addr, int *jaddr)
+static int do_tlb_r_branch(int map, int c, u_int addr, intptr_t *jaddr)
 {
   assert(0);
   if(!c||(signed int)addr>=(signed int)0xC0000000) {
@@ -4084,7 +4106,7 @@ static int do_tlb_w(int s,int ar,int map,int cache,int x,int c,u_int addr)
   }
   return map;
 }
-static void do_tlb_w_branch(int map, int c, u_int addr, int *jaddr)
+static void do_tlb_w_branch(int map, int c, u_int addr, intptr_t *jaddr)
 {
   assert(0);
   if(!c||addr<0x80800000||addr>=0xC0000000) {
@@ -4237,7 +4259,8 @@ static void loadlr_assemble_arm(int i,struct regstat *i_regs)
   int s,th,tl,temp,temp2,addr,map=-1,cache=-1;
   int offset;
   intptr_t jaddr=0;
-  int memtarget,c=0;
+  int memtarget=0;
+  int c=0;
   u_int hr,reglist=0;
   th=get_reg(i_regs->regmap,rt1[i]|64);
   tl=get_reg(i_regs->regmap,rt1[i]);

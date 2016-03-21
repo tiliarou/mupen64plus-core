@@ -76,7 +76,7 @@
 #define MAXBLOCK 4096
 #define MAX_OUTPUT_BLOCK_SIZE 262144
 #define CLOCK_DIVIDER count_per_op
-#define WRITE_PROTECT (1<<((sizeof(uintptr_t)<<3)-2))
+#define WRITE_PROTECT ((uintptr_t)1<<((sizeof(uintptr_t)<<3)-2))
 
 struct regstat
 {
@@ -2751,7 +2751,8 @@ static void load_assemble(int i,struct regstat *i_regs)
   int s,th,tl,addr,map=-1,cache=-1;
   int offset;
   intptr_t jaddr=0;
-  int memtarget,c=0;
+  int memtarget=0;
+  int c=0;
   u_int hr,reglist=0;
   th=get_reg(i_regs->regmap,rt1[i]|64);
   tl=get_reg(i_regs->regmap,rt1[i]);
@@ -3027,7 +3028,8 @@ static void store_assemble(int i,struct regstat *i_regs)
   intptr_t jaddr=0;
   intptr_t jaddr2=0;
   int type=0;
-  int memtarget,c=0;
+  int memtarget=0;
+  int c=0;
   int agr=AGEN1+(i&1);
   u_int hr,reglist=0;
   th=get_reg(i_regs->regmap,rs2[i]|64);
@@ -3911,7 +3913,7 @@ static void loop_preload(signed char pre[],signed char entry[])
 static void address_generation(int i,struct regstat *i_regs,signed char entry[])
 {
   if(itype[i]==LOAD||itype[i]==LOADLR||itype[i]==STORE||itype[i]==STORELR||itype[i]==C1LS) {
-    int ra;
+    int ra=0;
     int agr=AGEN1+(i&1);
     int mgr=MGEN1+(i&1);
     if(itype[i]==LOAD) {
@@ -4769,7 +4771,9 @@ static void do_ccstub(int n)
           emit_loadreg(rs2[i],s2l);
       #endif
       int hr=0;
-      int addr,alt,ntaddr;
+      int addr=0;
+      int alt=0;
+      int ntaddr=0;
       while(hr<HOST_REGS)
       {
         if(hr!=EXCLUDE_REG && hr!=HOST_CCREG &&
@@ -7617,9 +7621,9 @@ void new_dynarec_init(void)
   out=(u_char *)base_addr;
 
   rdword=&readmem_dword;
-  fake_pc.f.r.rs=(long long int *)&readmem_dword;
-  fake_pc.f.r.rt=(long long int *)&readmem_dword;
-  fake_pc.f.r.rd=(long long int *)&readmem_dword;
+  fake_pc.f.r.rs=(int64_t *)&readmem_dword;
+  fake_pc.f.r.rt=(int64_t *)&readmem_dword;
+  fake_pc.f.r.rd=(int64_t *)&readmem_dword;
   int n;
   for(n=0x80000;n<0x80800;n++)
     invalid_code[n]=1;

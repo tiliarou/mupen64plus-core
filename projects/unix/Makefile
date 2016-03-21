@@ -523,23 +523,25 @@ ifneq ($(DYNAREC), )
     ifeq ($(DYNAREC), x86)
       CFLAGS += -DNEW_DYNAREC=1
       SOURCE += \
-	    $(SRCDIR)/r4300/new_dynarec/x86/linkage_x86.asm
+        $(SRCDIR)/r4300/new_dynarec/x86/linkage_x86.asm \
+        $(SRCDIR)/r4300/new_dynarec/new_dynarec.c
     endif
       ifeq ($(DYNAREC), arm)
         CFLAGS += -DNEW_DYNAREC=3
         SOURCE += \
          $(SRCDIR)/r4300/new_dynarec/arm/linkage_arm.S \
-         $(SRCDIR)/r4300/new_dynarec/arm/arm_cpu_features.c
+         $(SRCDIR)/r4300/new_dynarec/arm/arm_cpu_features.c \
+         $(SRCDIR)/r4300/new_dynarec/new_dynarec.c
       endif
     ifeq ($(DYNAREC), aarch64)
       CFLAGS += -DNEW_DYNAREC=4
       SOURCE += \
-        $(SRCDIR)/r4300/new_dynarec/arm64/linkage_arm64.S
+        $(SRCDIR)/r4300/new_dynarec/arm64/linkage_arm64.S \
+        $(SRCDIR)/r4300/new_dynarec/new_dynarec_arm64.c
     endif
 
     SOURCE += \
-      $(SRCDIR)/r4300/empty_dynarec.c \
-      $(SRCDIR)/r4300/new_dynarec/new_dynarec.c
+      $(SRCDIR)/r4300/empty_dynarec.c
   else
     SOURCE += \
       $(SRCDIR)/r4300/$(DYNAREC)/assemble.c \

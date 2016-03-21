@@ -193,7 +193,27 @@ GLOBAL_FUNCTION(jump_eret):
     nop
     
 GLOBAL_FUNCTION(new_dyna_start):
-    nop
+    adrp   x16, dynarec_local
+    add    x16, x16, :lo12:dynarec_local
+    add    x16, x16, #152
+    adrp   x1, base_addr
+    add    x1, x1, :lo12:base_addr
+    mov    w0, #0xa4000000
+    stp    x19,x20,[x16,#0]
+    stp    x21,x22,[x16,#16]
+    stp    x23,x24,[x16,#32]
+    stp    x25,x26,[x16,#48]
+    stp    x27,x28,[x16,#64]
+    stp    x29,x30,[x16,#80]
+    sub    x29, x16, #152
+    ldr    x19, [x1]
+    add    w0, w0, #0x40
+    bl     new_recompile_block
+    ldr    w0, [x29, #next_interupt-dynarec_local]
+    ldr    w20, [x29, #g_cp0_regs+36-dynarec_local] /* Count */
+    str    w0, [x29, #last_count-dynarec_local]
+    sub    w20, w20, w0
+    br     x19
     
 GLOBAL_FUNCTION(invalidate_addr_r0):
     nop
