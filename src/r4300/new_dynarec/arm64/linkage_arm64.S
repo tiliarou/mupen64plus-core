@@ -184,10 +184,13 @@ GLOBAL_FUNCTION(jump_syscall):
     nop
     
 GLOBAL_FUNCTION(indirect_jump_indexed):
-    nop
-    
+    ldr    x0, [x0, x1, lsl #2]
+
 GLOBAL_FUNCTION(indirect_jump):
-    nop
+    ldr    w30, [x29, #last_count-dynarec_local]
+    add    w2, w2, w30 
+    str    w2, [x29, #g_cp0_regs+36-dynarec_local] /* Count */
+    br     x0
     
 GLOBAL_FUNCTION(jump_eret):
     nop
