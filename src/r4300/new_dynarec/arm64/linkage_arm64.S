@@ -115,85 +115,136 @@ END_SECTION
 TEXT_SECTION
 
 GLOBAL_FUNCTION(dyna_linker):
-    nop
+    brk
     
 GLOBAL_FUNCTION(dyna_linker_ds):
-    nop
+    brk
     
-GLOBAL_FUNCTION(jump_vaddr_r0):
-    nop
+GLOBAL_FUNCTION(jump_vaddr_x0):
+    brk
     
-GLOBAL_FUNCTION(jump_vaddr_r1):
-    nop
+GLOBAL_FUNCTION(jump_vaddr_x1):
+    brk
     
-GLOBAL_FUNCTION(jump_vaddr_r2):
-    nop
+GLOBAL_FUNCTION(jump_vaddr_x2):
+    brk
     
-GLOBAL_FUNCTION(jump_vaddr_r3):
-    nop
+GLOBAL_FUNCTION(jump_vaddr_x3):
+    brk
     
-GLOBAL_FUNCTION(jump_vaddr_r4):
-    nop
+GLOBAL_FUNCTION(jump_vaddr_x4):
+    brk
     
-GLOBAL_FUNCTION(jump_vaddr_r5):
-    nop
+GLOBAL_FUNCTION(jump_vaddr_x5):
+    brk
     
-GLOBAL_FUNCTION(jump_vaddr_r6):
-    nop
+GLOBAL_FUNCTION(jump_vaddr_x6):
+    brk
     
-GLOBAL_FUNCTION(jump_vaddr_r8):
-    nop
+GLOBAL_FUNCTION(jump_vaddr_x7):
+    brk
     
-GLOBAL_FUNCTION(jump_vaddr_r9):
-    nop
+GLOBAL_FUNCTION(jump_vaddr_x8):
+    brk
     
-GLOBAL_FUNCTION(jump_vaddr_r10):
-    nop
+GLOBAL_FUNCTION(jump_vaddr_x9):
+    brk
     
-GLOBAL_FUNCTION(jump_vaddr_r12):
-    nop
+GLOBAL_FUNCTION(jump_vaddr_x10):
+    brk
     
-GLOBAL_FUNCTION(jump_vaddr_r7):
-    nop
+GLOBAL_FUNCTION(jump_vaddr_x11):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x12):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x13):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x14):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x15):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x16):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x17):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x18):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x19):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x20):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x21):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x22):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x23):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x24):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x25):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x26):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x27):
+    brk
+    
+GLOBAL_FUNCTION(jump_vaddr_x28):
+    brk
     
 GLOBAL_FUNCTION(jump_vaddr):
-    nop
+    brk
     
 GLOBAL_FUNCTION(verify_code_ds):
-    nop
+    brk
     
 GLOBAL_FUNCTION(verify_code_vm):
-    nop
+    brk
     
 GLOBAL_FUNCTION(verify_code):
-    nop
+    brk
     
 GLOBAL_FUNCTION(cc_interrupt):
-    nop
+    brk
     
 GLOBAL_FUNCTION(do_interrupt):
-    nop
+    brk
     
 GLOBAL_FUNCTION(fp_exception):
-    nop
+    brk
     
 GLOBAL_FUNCTION(fp_exception_ds):
-    nop
+    brk
     
 GLOBAL_FUNCTION(jump_syscall):
-    nop
+    brk
     
 GLOBAL_FUNCTION(indirect_jump_indexed):
-    ldr    x0, [x0, x1, lsl #2]
+    ldr    x0, [x0, x1, lsl #3]
 
 GLOBAL_FUNCTION(indirect_jump):
-    ldr    w30, [x29, #last_count-dynarec_local]
-    add    w2, w2, w30 
+    ldr    w18, [x29, #last_count-dynarec_local]
+    add    w2, w2, w18 
     str    w2, [x29, #g_cp0_regs+36-dynarec_local] /* Count */
     br     x0
     
 GLOBAL_FUNCTION(jump_eret):
-    nop
+    brk
     
 GLOBAL_FUNCTION(new_dyna_start):
     adrp   x16, dynarec_local
@@ -218,80 +269,131 @@ GLOBAL_FUNCTION(new_dyna_start):
     sub    w20, w20, w0
     br     x19
     
-GLOBAL_FUNCTION(invalidate_addr_r0):
-    nop
+GLOBAL_FUNCTION(invalidate_addr_x0):
+    brk
     
-GLOBAL_FUNCTION(invalidate_addr_r1):
-    nop
+GLOBAL_FUNCTION(invalidate_addr_x1):
+    brk
     
-GLOBAL_FUNCTION(invalidate_addr_r2):
-    nop
+GLOBAL_FUNCTION(invalidate_addr_x2):
+    brk
     
-GLOBAL_FUNCTION(invalidate_addr_r3):
-    nop
+GLOBAL_FUNCTION(invalidate_addr_x3):
+    brk
     
-GLOBAL_FUNCTION(invalidate_addr_r4):
-    nop
+GLOBAL_FUNCTION(invalidate_addr_x4):
+    brk
     
-GLOBAL_FUNCTION(invalidate_addr_r5):
-    nop
+GLOBAL_FUNCTION(invalidate_addr_x5):
+    brk
     
-GLOBAL_FUNCTION(invalidate_addr_r6):
-    nop
+GLOBAL_FUNCTION(invalidate_addr_x6):
+    brk
     
-GLOBAL_FUNCTION(invalidate_addr_r7):
-    nop
+GLOBAL_FUNCTION(invalidate_addr_x7):
+    brk
     
-GLOBAL_FUNCTION(invalidate_addr_r8):
-    nop
+GLOBAL_FUNCTION(invalidate_addr_x8):
+    brk
     
-GLOBAL_FUNCTION(invalidate_addr_r9):
-    nop
+GLOBAL_FUNCTION(invalidate_addr_x9):
+    brk
     
-GLOBAL_FUNCTION(invalidate_addr_r10):
-    nop
+GLOBAL_FUNCTION(invalidate_addr_x10):
+    brk
     
-GLOBAL_FUNCTION(invalidate_addr_r12):
-    nop
+GLOBAL_FUNCTION(invalidate_addr_x11):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x12):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x13):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x14):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x15):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x16):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x17):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x18):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x19):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x20):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x21):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x22):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x23):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x24):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x25):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x26):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x27):
+    brk
+    
+GLOBAL_FUNCTION(invalidate_addr_x28):
+    brk
     
 GLOBAL_FUNCTION(write_rdram_new):
-    nop
+    brk
     
 GLOBAL_FUNCTION(write_rdramb_new):
-    nop
+    brk
     
 GLOBAL_FUNCTION(write_rdramh_new):
-    nop
+    brk
     
 GLOBAL_FUNCTION(write_rdramd_new):
-    nop
+    brk
     
 GLOBAL_FUNCTION(read_nomem_new):
-    nop
+    brk
     
 GLOBAL_FUNCTION(read_nomemb_new):
-    nop
+    brk
     
 GLOBAL_FUNCTION(read_nomemh_new):
-    nop
+    brk
     
 GLOBAL_FUNCTION(read_nomemd_new):
-    nop
+    brk
     
 GLOBAL_FUNCTION(write_nomem_new):
-    nop
+    brk
     
 GLOBAL_FUNCTION(write_nomemb_new):
-    nop
+    brk
     
 GLOBAL_FUNCTION(write_nomemh_new):
-    nop
+    brk
     
 GLOBAL_FUNCTION(write_nomemd_new):
-    nop
+    brk
     
 GLOBAL_FUNCTION(breakpoint):
-    nop
+    brk
     
 GLOBAL_FUNCTION(__clear_cache_bugfix):
     nop
