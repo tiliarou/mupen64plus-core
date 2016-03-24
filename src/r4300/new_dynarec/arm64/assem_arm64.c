@@ -276,9 +276,11 @@ static void set_jump_target(intptr_t addr,uintptr_t target)
   u_char *ptr=(u_char *)addr;
   u_int *ptr2=(u_int *)ptr;
 
+  int offset=target-(intptr_t)addr;
+
   if(ptr[3]==0x14) {
     assert(((intptr_t)target-addr)>=-134217728&&((intptr_t)target-addr)<134217728);
-    *ptr2=(*ptr2&0xFF000000)|(((target-(uintptr_t)ptr2)<<6)>>8);
+    *ptr2=(*ptr2&0xFC000000)|(((u_int)offset>>2)&0x3ffffff);
   }
   else if(ptr[3]==0x54) {
     //Conditional branch are limited to +/- 1MB
@@ -286,7 +288,7 @@ static void set_jump_target(intptr_t addr,uintptr_t target)
     //should only happen when jumping to an already compiled block (see add_link)
     //a workaround would be to do a trampoline jump via a stub at the end of the block
     assert(((intptr_t)target-addr)>=-1048576&&((intptr_t)target-addr)<1048576);
-    *ptr2=(*ptr2&0xFF00000F)|((((target-(uintptr_t)ptr2)<<13)>>15)<<5);
+    *ptr2=(*ptr2&0xFF00000F)|((((u_int)offset>>2)&0x7ffff)<<5);
   }
   else {
     assert(0);
