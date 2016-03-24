@@ -254,6 +254,9 @@ static void set_jump_target_fillslot(int addr,u_int target,int copy)
 
 static void *dynamic_linker(void * src, u_int vaddr)
 {
+#ifdef NEW_DYNAREC_DEBUG
+  print_debug_info(vaddr);
+#endif
   u_int page=(vaddr^0x80000000)>>12;
   u_int vpage=page;
   if(page>262143&&tlb_LUT_r[vaddr>>12]) page=(tlb_LUT_r[vaddr>>12]^0x80000000)>>12;
@@ -344,6 +347,9 @@ static void *dynamic_linker(void * src, u_int vaddr)
 
 static void *dynamic_linker_ds(void * src, u_int vaddr)
 {
+#ifdef NEW_DYNAREC_DEBUG
+  print_debug_info(vaddr);
+#endif
   u_int page=(vaddr^0x80000000)>>12;
   u_int vpage=page;
   if(page>262143&&tlb_LUT_r[vaddr>>12]) page=(tlb_LUT_r[vaddr>>12]^0x80000000)>>12;

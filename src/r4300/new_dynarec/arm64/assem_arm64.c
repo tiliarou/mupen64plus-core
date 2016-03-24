@@ -358,6 +358,9 @@ static void set_jump_target_fillslot(int addr,u_int target,int copy)
 
 static void *dynamic_linker(void * src, u_int vaddr)
 {
+#ifdef NEW_DYNAREC_DEBUG
+  print_debug_info(vaddr);
+#endif
   assert(0);
   u_int page=(vaddr^0x80000000)>>12;
   u_int vpage=page;
@@ -450,6 +453,9 @@ static void *dynamic_linker(void * src, u_int vaddr)
 
 static void *dynamic_linker_ds(void * src, u_int vaddr)
 {
+#ifdef NEW_DYNAREC_DEBUG
+  print_debug_info(vaddr);
+#endif
   assert(0);
   u_int page=(vaddr^0x80000000)>>12;
   u_int vpage=page;

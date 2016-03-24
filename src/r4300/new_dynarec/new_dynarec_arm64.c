@@ -268,6 +268,61 @@ static void nullf() {}
     #define inv_debug nullf
 #endif
 
+#ifdef NEW_DYNAREC_DEBUG
+static int rdram_checksum(void)
+{
+  int i;
+  int sum=0;
+  for(i=0;i<2097152;i++) {
+    unsigned int temp=sum;
+    sum<<=1;
+    sum|=(~temp)>>31;
+    sum^=((u_int *)g_rdram)[i];
+  }
+  return sum;
+}
+
+static int gpr_checksum(void)
+{
+  int i;
+  int sum=0;
+  for(i=0;i<64;i++)
+    sum^=((u_int *)reg)[i];
+  return sum;
+}
+
+static int fpr_checksum()
+{
+  int i;
+  int sum=0;
+  for(i=0;i<32;i++)
+  {
+    sum ^= ((u_int*)reg_cop1_simple[i])[0];
+    sum ^= ((u_int*)reg_cop1_simple[i])[1];
+  }
+  return sum;
+}
+
+static void print_debug_info(u_int vaddr)
+{
+  int i;
+  int gpr_sum = gpr_checksum();
+  int fpr_sum = fpr_checksum();
+  DebugMessage(M64MSG_INFO, "target addr:%.8x",vaddr);
+  DebugMessage(M64MSG_INFO, "rdram checksum:%x",rdram_checksum());
+  DebugMessage(M64MSG_INFO, "gpr checksum:%x",gpr_sum);
+  DebugMessage(M64MSG_INFO, "fpr checksum:%x",fpr_sum);
+  if(gpr_sum!=0){
+    for(i=0;i<32;i++)
+      DebugMessage(M64MSG_INFO, "r%d:%.8x%.8x",i,((int *)(reg+i))[1],((int *)(reg+i))[0]);
+  }
+  if(fpr_sum!=0){
+    for(i=0;i<32;i++)
+      DebugMessage(M64MSG_INFO, "f%d:%.8x%.8x",i,((int*)reg_cop1_simple[i])[1],*((int*)reg_cop1_simple[i]));
+  }
+}
+#endif
+
 static void tlb_hacks(void)
 {
   // Goldeneye hack
@@ -317,6 +372,9 @@ static void tlb_hacks(void)
 // This is called from the recompiled JR/JALR instructions
 void *get_addr(u_int vaddr)
 {
+#ifdef NEW_DYNAREC_DEBUG
+  print_debug_info(vaddr);
+#endif
   u_int page=(vaddr^0x80000000)>>12;
   u_int vpage=page;
   if(page>262143&&tlb_LUT_r[vaddr>>12]) page=(tlb_LUT_r[vaddr>>12]^0x80000000)>>12;
@@ -388,6 +446,9 @@ void *get_addr(u_int vaddr)
 // Look up address in hash table first
 void *get_addr_ht(u_int vaddr)
 {
+#ifdef NEW_DYNAREC_DEBUG
+  print_debug_info(vaddr);
+#endif
   //DebugMessage(M64MSG_VERBOSE, "TRACE: count=%d next=%d (get_addr_ht %x)",g_cp0_regs[CP0_COUNT_REG],next_interupt,vaddr);
   uintptr_t *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
   if(ht_bin[0]==vaddr) return (void *)ht_bin[1];
@@ -397,6 +458,9 @@ void *get_addr_ht(u_int vaddr)
 
 void *get_addr_32(u_int vaddr,u_int flags)
 {
+#ifdef NEW_DYNAREC_DEBUG
+  print_debug_info(vaddr);
+#endif
   //DebugMessage(M64MSG_VERBOSE, "TRACE: count=%d next=%d (get_addr_32 %x,flags %x)",g_cp0_regs[CP0_COUNT_REG],next_interupt,vaddr,flags);
   uintptr_t *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
   if(ht_bin[0]==vaddr) return (void *)ht_bin[1];
