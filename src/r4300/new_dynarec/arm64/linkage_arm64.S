@@ -115,124 +115,178 @@ END_SECTION
 TEXT_SECTION
 
 GLOBAL_FUNCTION(dyna_linker):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(dyna_linker_ds):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x0):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x1):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x2):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x3):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x4):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x5):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x6):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x7):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x8):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x9):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x10):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x11):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x12):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x13):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x14):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x15):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x16):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x17):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x18):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x19):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x20):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x21):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x22):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x23):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x24):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x25):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x26):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x27):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x28):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_vaddr):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(verify_code_ds):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(verify_code_vm):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(verify_code):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(cc_interrupt):
-    brk
+    ldr    w0, [x29, #last_count-dynarec_local]
+    add    w20, w0, w20 /* Count */
+    str    wzr, [x29, #pending_exception-dynarec_local]
+    mov    w1, #0x1fc
+    lsr    w0, w20, #19
+    and    w1, w1, w0 
+    add    x0, x29, #restore_candidate-dynarec_local
+    str    w20, [x29, #g_cp0_regs+36-dynarec_local] /* Count */
+    ldr    w2, [x1, x0]
+    mov    x20, x30 /* Save link register */
+    tst    w2, w2
+    b.ne   .E4
+.E1:
+    bl     gen_interupt
+    mov    x30, x20 /* Restore link register */
+    ldr    w20, [x29, #g_cp0_regs+36-dynarec_local] /* Count */
+    ldr    w0, [x29, #next_interupt-dynarec_local]
+    ldr    w1, [x29, #pending_exception-dynarec_local]
+    ldr    w2, [x29, #stop-dynarec_local]
+    str    w0, [x29, #last_count-dynarec_local]
+    sub    w20, w20, w0
+    tst    w2, w2
+    b.ne   .E3
+    tst    w1, w1
+    b.ne   .E2
+    ret    /* br x30 */
+.E2:
+    ldr    w0, [x29, #pcaddr-dynarec_local]
+    bl     get_addr_ht
+    br     x0
+.E3:
+    add    x16, x29, #152
+    ldp    x19,x20,[x16,#0]
+    ldp    x21,x22,[x16,#16]
+    ldp    x23,x24,[x16,#32]
+    ldp    x25,x26,[x16,#48]
+    ldp    x27,x28,[x16,#64]
+    ldp    x29,x30,[x16,#80]
+.E4:
+    /* Move 'dirty' blocks to the 'clean' list */
+    str    wzr, [x1, x0]
+    lsl    w1, w1, #3
+    mov    w3, #0
+.E5:
+    and    w0, w2, #1
+    tst    w0, w0
+    add    w0, w1, w3
+    b.ne   .E6
+    bl     clean_blocks
+.E6:
+    lsr    w2, w2, #1
+    add    w3, w3, #1
+    tst    w3, #31
+    b.ne   .E5
+    b      .E1
     
 GLOBAL_FUNCTION(do_interrupt):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(fp_exception):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(fp_exception_ds):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(jump_syscall):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(indirect_jump_indexed):
     ldr    x0, [x0, x1, lsl #3]
@@ -244,7 +298,7 @@ GLOBAL_FUNCTION(indirect_jump):
     br     x0
     
 GLOBAL_FUNCTION(jump_eret):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(new_dyna_start):
     adrp   x16, dynarec_local
@@ -270,130 +324,130 @@ GLOBAL_FUNCTION(new_dyna_start):
     br     x19
     
 GLOBAL_FUNCTION(invalidate_addr_x0):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x1):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x2):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x3):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x4):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x5):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x6):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x7):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x8):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x9):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x10):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x11):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x12):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x13):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x14):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x15):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x16):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x17):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x18):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x19):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x20):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x21):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x22):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x23):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x24):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x25):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x26):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x27):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(invalidate_addr_x28):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(write_rdram_new):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(write_rdramb_new):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(write_rdramh_new):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(write_rdramd_new):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(read_nomem_new):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(read_nomemb_new):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(read_nomemh_new):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(read_nomemd_new):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(write_nomem_new):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(write_nomemb_new):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(write_nomemh_new):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(write_nomemd_new):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(breakpoint):
-    brk
+    brk 0
     
 GLOBAL_FUNCTION(__clear_cache_bugfix):
     nop

@@ -93,6 +93,8 @@ ifneq ("$(filter aarch64,$(HOST_CPU))","")
   ARCH_DETECTED := 64BITS
   PIC ?= 1
   NEW_DYNAREC := 1
+  CFLAGS += -DNEW_DYNAREC_DEBUG
+  LDFLAGS += -Wl,-Map,core.map
   $(warning Architecture "$(HOST_CPU)" not officially supported.')
 endif
 ifneq ("$(filter arm%,$(HOST_CPU))","")
