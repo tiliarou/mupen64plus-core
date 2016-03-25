@@ -361,7 +361,6 @@ static void *dynamic_linker(void * src, u_int vaddr)
 #ifdef NEW_DYNAREC_DEBUG
   print_debug_info(vaddr);
 #endif
-  assert(0);
   u_int page=(vaddr^0x80000000)>>12;
   u_int vpage=page;
   if(page>262143&&tlb_LUT_r[vaddr>>12]) page=(tlb_LUT_r[vaddr>>12]^0x80000000)>>12;
@@ -374,32 +373,23 @@ static void *dynamic_linker(void * src, u_int vaddr)
   while(head!=NULL) {
     if(head->vaddr==vaddr&&head->reg32==0) {
       int *ptr=(int*)src;
-      assert((*ptr&0x0f000000)==0x0a000000); //jmp
-      int offset=(int)(((u_int)*ptr+2)<<8)>>6;
-      void *ptr2=(void*)((u_int)ptr+(u_int)offset);
-#ifdef ARMv5_ONLY
-      assert((*(int*)((u_int)ptr2)&0x0ff00000)==0x05900000); //ldr
-      assert((*(int*)((u_int)ptr2+4)&0x0ff00000)==0x05900000); //ldr
-      assert((*(int*)((u_int)ptr2+8)&0x0f000000)==0x0b000000); //bl
-      assert((*(int*)((u_int)ptr2+12)&0x0ff00000)==0x01a00000); //mov
-#else
-      assert((*(int*)((u_int)ptr2)&0x0ff00000)==0x03000000); //movw
-      assert((*(int*)((u_int)ptr2+4)&0x0ff00000)==0x03400000); //movt
-      assert((*(int*)((u_int)ptr2+8)&0x0ff00000)==0x03000000); //movw
-      assert((*(int*)((u_int)ptr2+12)&0x0ff00000)==0x03400000); //movt
-      assert((*(int*)((u_int)ptr2+16)&0x0f000000)==0x0b000000); //bl
-      assert((*(int*)((u_int)ptr2+20)&0x0ff00000)==0x01a00000); //mov
-#endif
-      //TOBEDONE: Disable link between blocks for conditional branches
+      assert((*ptr&0xfc000000)==0x14000000); //b
+      int offset=((signed int)(*ptr<<6)>>6)<<2;
+      u_int *ptr2=(u_int*)((intptr_t)ptr+offset);
+      assert((ptr2[0]&0xffe00000)==0x52a00000); //movz
+      assert((ptr2[1]&0xffe00000)==0x72800000); //movk
+      assert((ptr2[2]&0x9f000000)==0x10000000); //adr
+      assert((ptr2[3]&0xfc000000)==0x94000000); //bl
+      assert((ptr2[4]&0xfffffc1f)==0xd61f0000); //br
       add_link(vaddr, ptr2);
-      *ptr=(*ptr&0xFF000000)|((((u_int)head->addr-(u_int)ptr-8)<<6)>>8);
+      set_jump_target((intptr_t)ptr, (uintptr_t)head->addr);
       __clear_cache((void*)ptr, (void*)((u_int)ptr+4));
       return head->addr;
     }
     head=head->next;
   }
 
-  u_int *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
+  uintptr_t *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
   if(ht_bin[0]==vaddr) return (void *)ht_bin[1];
   if(ht_bin[2]==vaddr) return (void *)ht_bin[3];
 
@@ -408,7 +398,7 @@ static void *dynamic_linker(void * src, u_int vaddr)
     if(head->vaddr==vaddr&&head->reg32==0) {
       //DebugMessage(M64MSG_VERBOSE, "TRACE: count=%d next=%d (get_addr match dirty %x: %x)",g_cp0_regs[CP0_COUNT_REG],next_interupt,vaddr,(int)head->addr);
       // Don't restore blocks which are about to expire from the cache
-      if((((u_int)head->addr-(u_int)out)<<(32-TARGET_SIZE_2))>0x60000000+(MAX_OUTPUT_BLOCK_SIZE<<(32-TARGET_SIZE_2))) {
+      if((((uintptr_t)head->addr-(uintptr_t)out)<<(32-TARGET_SIZE_2))>0x60000000+(MAX_OUTPUT_BLOCK_SIZE<<(32-TARGET_SIZE_2))) {
         if(verify_dirty(head->addr)) {
           //DebugMessage(M64MSG_VERBOSE, "restore candidate: %x (%d) d=%d",vaddr,page,invalid_code[vaddr>>12]);
           invalid_code[vaddr>>12]=0;
@@ -421,15 +411,15 @@ static void *dynamic_linker(void * src, u_int vaddr)
             restore_candidate[vpage>>3]|=1<<(vpage&7);
           }
           else restore_candidate[page>>3]|=1<<(page&7);
-          u_int *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
+          uintptr_t *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
           if(ht_bin[0]==vaddr) {
-            ht_bin[1]=(int)head->addr; // Replace existing entry
+            ht_bin[1]=(intptr_t)head->addr; // Replace existing entry
           }
           else
           {
             ht_bin[3]=ht_bin[1];
             ht_bin[2]=ht_bin[0];
-            ht_bin[1]=(int)head->addr;
+            ht_bin[1]=(intptr_t)head->addr;
             ht_bin[0]=vaddr;
           }
           return head->addr;
@@ -469,32 +459,23 @@ static void *dynamic_linker_ds(void * src, u_int vaddr)
   while(head!=NULL) {
     if(head->vaddr==vaddr&&head->reg32==0) {
       int *ptr=(int*)src;
-      assert((*ptr&0x0f000000)==0x0a000000); //jmp
-      int offset=(int)(((u_int)*ptr+2)<<8)>>6;
-      void *ptr2=(void*)((u_int)ptr+(u_int)offset);
-#ifdef ARMv5_ONLY
-      assert((*(int*)((u_int)ptr2)&0x0ff00000)==0x05900000); //ldr
-      assert((*(int*)((u_int)ptr2+4)&0x0ff00000)==0x05900000); //ldr
-      assert((*(int*)((u_int)ptr2+8)&0x0f000000)==0x0b000000); //bl
-      assert((*(int*)((u_int)ptr2+12)&0x0ff00000)==0x01a00000); //mov
-#else
-      assert((*(int*)((u_int)ptr2)&0x0ff00000)==0x03000000); //movw
-      assert((*(int*)((u_int)ptr2+4)&0x0ff00000)==0x03400000); //movt
-      assert((*(int*)((u_int)ptr2+8)&0x0ff00000)==0x03000000); //movw
-      assert((*(int*)((u_int)ptr2+12)&0x0ff00000)==0x03400000); //movt
-      assert((*(int*)((u_int)ptr2+16)&0x0f000000)==0x0b000000); //bl
-      assert((*(int*)((u_int)ptr2+20)&0x0ff00000)==0x01a00000); //mov
-#endif
-      //TOBEDONE: Disable link between blocks for conditional branches
+      assert((*ptr&0xfc000000)==0x14000000); //b
+      int offset=((signed int)(*ptr<<6)>>6)<<2;
+      u_int *ptr2=(u_int*)((intptr_t)ptr+offset);
+      assert((ptr2[0]&0xffe00000)==0x52a00000); //movz
+      assert((ptr2[1]&0xffe00000)==0x72800000); //movk
+      assert((ptr2[2]&0x9f000000)==0x10000000); //adr
+      assert((ptr2[3]&0xfc000000)==0x94000000); //bl
+      assert((ptr2[4]&0xfffffc1f)==0xd61f0000); //br
       add_link(vaddr, ptr2);
-      *ptr=(*ptr&0xFF000000)|((((u_int)head->addr-(u_int)ptr-8)<<6)>>8);
+      set_jump_target((intptr_t)ptr, (uintptr_t)head->addr);
       __clear_cache((void*)ptr, (void*)((u_int)ptr+4));
       return head->addr;
     }
     head=head->next;
   }
 
-  u_int *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
+  uintptr_t *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
   if(ht_bin[0]==vaddr) return (void *)ht_bin[1];
   if(ht_bin[2]==vaddr) return (void *)ht_bin[3];
 
@@ -503,7 +484,7 @@ static void *dynamic_linker_ds(void * src, u_int vaddr)
     if(head->vaddr==vaddr&&head->reg32==0) {
       //DebugMessage(M64MSG_VERBOSE, "TRACE: count=%d next=%d (get_addr match dirty %x: %x)",g_cp0_regs[CP0_COUNT_REG],next_interupt,vaddr,(int)head->addr);
       // Don't restore blocks which are about to expire from the cache
-      if((((u_int)head->addr-(u_int)out)<<(32-TARGET_SIZE_2))>0x60000000+(MAX_OUTPUT_BLOCK_SIZE<<(32-TARGET_SIZE_2))) {
+      if((((uintptr_t)head->addr-(uintptr_t)out)<<(32-TARGET_SIZE_2))>0x60000000+(MAX_OUTPUT_BLOCK_SIZE<<(32-TARGET_SIZE_2))) {
         if(verify_dirty(head->addr)) {
           //DebugMessage(M64MSG_VERBOSE, "restore candidate: %x (%d) d=%d",vaddr,page,invalid_code[vaddr>>12]);
           invalid_code[vaddr>>12]=0;
@@ -516,15 +497,15 @@ static void *dynamic_linker_ds(void * src, u_int vaddr)
             restore_candidate[vpage>>3]|=1<<(vpage&7);
           }
           else restore_candidate[page>>3]|=1<<(page&7);
-          u_int *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
+          uintptr_t *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
           if(ht_bin[0]==vaddr) {
-            ht_bin[1]=(int)head->addr; // Replace existing entry
+            ht_bin[1]=(intptr_t)head->addr; // Replace existing entry
           }
           else
           {
             ht_bin[3]=ht_bin[1];
             ht_bin[2]=ht_bin[0];
-            ht_bin[1]=(int)head->addr;
+            ht_bin[1]=(intptr_t)head->addr;
             ht_bin[0]=vaddr;
           }
           return head->addr;
@@ -557,61 +538,35 @@ static void add_literal(int addr,int val)
 
 static void *kill_pointer(void *stub)
 {
-  assert(0);
-#ifdef ARMv5_ONLY
-  int *ptr=(int *)(stub+4);
-  assert((*ptr&0x0ff00000)==0x05900000); //ldr
-  u_int offset=*ptr&0xfff;
-  int **l_ptr=(void *)ptr+offset+8;
-  int *i_ptr=*l_ptr;
-#else
-  int *ptr=(int *)((int)stub+8);
-  int *ptr2=(int *)((int)stub+12);
-  assert((*ptr&0x0ff00000)==0x03000000); //movw
-  assert((*ptr2&0x0ff00000)==0x03400000); //movt
-  int *i_ptr=(int*)((*ptr&0xfff)|((*ptr>>4)&0xf000)|((*ptr2&0xfff)<<16)|((*ptr2&0xf0000)<<12));
-#endif
-  assert((*i_ptr&0x0f000000)==0x0a000000); //jmp
-  set_jump_target((int)i_ptr,(int)stub);
+  int *ptr=(int *)((intptr_t)stub+8);
+  assert((*ptr&0x9f000000)==0x10000000); //adr
+  int *i_ptr=(int*)((intptr_t)ptr+(((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3));
+  assert((*i_ptr&0xfc000000)==0x14000000); //b
+  set_jump_target((intptr_t)i_ptr,(intptr_t)stub);
   return i_ptr;
 }
 
 static intptr_t get_pointer(void *stub)
 {
-  assert(0);
-#ifdef ARMv5_ONLY
-  int *ptr=(int *)(stub+4);
-  assert((*ptr&0x0ff00000)==0x05900000); //ldr
-  u_int offset=*ptr&0xfff;
-  int **l_ptr=(void *)ptr+offset+8;
-  int *i_ptr=*l_ptr;
-#else
-  int *ptr=(int *)((int)stub+8);
-  int *ptr2=(int *)((int)stub+12);
-  assert((*ptr&0x0ff00000)==0x03000000); //movw
-  assert((*ptr2&0x0ff00000)==0x03400000); //movt
-  int *i_ptr=(int*)((*ptr&0xfff)|((*ptr>>4)&0xf000)|((*ptr2&0xfff)<<16)|((*ptr2&0xf0000)<<12));
-#endif
-  assert((*i_ptr&0x0f000000)==0x0a000000); //jmp
-  return (int)i_ptr+((*i_ptr<<8)>>6)+8;
+  int *ptr=(int *)((intptr_t)stub+8);
+  assert((*ptr&0x9f000000)==0x10000000); //adr
+  int *i_ptr=(int*)((intptr_t)ptr+(((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3));
+  assert((*i_ptr&0xfc000000)==0x14000000); //b
+  return (intptr_t)i_ptr+(((signed int)(*i_ptr<<6)>>6)<<2);
 }
 
 // Find the "clean" entry point from a "dirty" entry point
 // by skipping past the call to verify_code
 static uintptr_t get_clean_addr(intptr_t addr)
 {
-  assert(0);
   int *ptr=(int *)addr;
-  #ifdef ARMv5_ONLY
-  ptr+=4;
-  #else
-  ptr+=6;
-  #endif
-  if((*ptr&0xFF000000)!=0xeb000000) ptr++;
-  assert((*ptr&0xFF000000)==0xeb000000); // bl instruction
+  while((*ptr&0xfc000000)!=0x94000000){ //bl
+    ptr++;
+    assert(((uintptr_t)ptr-(uintptr_t)addr)<=0x1C);
+  }
   ptr++;
-  if((*ptr&0xFF000000)==0xea000000) {
-    return (int)ptr+((*ptr<<8)>>6)+8; // follow jump
+  if((*ptr&0xfc000000)==0x14000000) { //b
+    return (intptr_t)ptr+(((signed int)(*ptr<<6)>>6)<<2); // follow branch
   }
   return (uintptr_t)ptr;
 }
@@ -685,23 +640,20 @@ static int verify_dirty(void *addr)
 // guarantees that it's not dirty
 static int isclean(intptr_t addr)
 {
-  assert(0);
-  #ifdef ARMv5_ONLY
-  int *ptr=((u_int *)addr)+4;
-  #else
-  int *ptr=((u_int *)addr)+6;
-  #endif
-  if((*ptr&0xFF000000)!=0xeb000000) ptr++;
-  if((*ptr&0xFF000000)!=0xeb000000) return 1; // bl instruction
-  u_int verifier=(int)ptr+((signed int)(*ptr<<8)>>6)+8; // get target of bl
-  if(verifier==(u_int)verify_code) return 0;
-  if(verifier==(u_int)verify_code_vm) return 0;
-  if(verifier==(u_int)verify_code_ds) return 0;
-  verifier=*((u_int*)(verifier+4));
-  if(verifier==(u_int)verify_code) return 0;
-  if(verifier==(u_int)verify_code_vm) return 0;
-  if(verifier==(u_int)verify_code_ds) return 0;
-  return 1;
+  int *ptr=(int *)addr;
+  while((*ptr&0xfc000000)!=0x94000000){ //bl
+    if((*ptr&0xfc000000)==0x14000000) //b
+      return 1;
+    ptr++;
+    if(((uintptr_t)ptr-(uintptr_t)addr)>0x1C)
+      return 1;
+  }
+  uintptr_t verifier=(intptr_t)ptr+(((signed int)(*ptr<<6)>>6)<<2); // follow branch
+  if(verifier==(uintptr_t)verify_code) return 0;
+  if(verifier==(uintptr_t)verify_code_vm) return 0;
+  if(verifier==(uintptr_t)verify_code_ds) return 0;
+  assert(0); //if this happens it's likely a bug
+  return 0;
 }
 
 static void get_bounds(intptr_t addr,uintptr_t *start,uintptr_t *end)
