@@ -618,41 +618,61 @@ static uintptr_t get_clean_addr(intptr_t addr)
 
 static int verify_dirty(void *addr)
 {
-  assert(0);
   u_int *ptr=(u_int *)addr;
-  #ifdef ARMv5_ONLY
-  // get from literal pool
-  assert((*ptr&0xFFF00000)==0xe5900000);
-  u_int offset=*ptr&0xfff;
-  u_int *l_ptr=(void *)ptr+offset+8;
-  u_int source=l_ptr[0];
-  u_int copy=l_ptr[1];
-  u_int len=l_ptr[2];
-  ptr+=4;
-  #else
-  // ARMv7 movw/movt
-  assert((*ptr&0xFFF00000)==0xe3000000);
-  u_int source=(ptr[0]&0xFFF)+((ptr[0]>>4)&0xF000)+((ptr[2]<<16)&0xFFF0000)+((ptr[2]<<12)&0xF0000000);
-  u_int copy=(ptr[1]&0xFFF)+((ptr[1]>>4)&0xF000)+((ptr[3]<<16)&0xFFF0000)+((ptr[3]<<12)&0xF0000000);
-  u_int len=(ptr[4]&0xFFF)+((ptr[4]>>4)&0xF000);
-  ptr+=6;
-  #endif
-  if((*ptr&0xFF000000)!=0xeb000000) ptr++;
-  assert((*ptr&0xFF000000)==0xeb000000); // bl instruction
-  u_int verifier=(int)ptr+((signed int)(*ptr<<8)>>6)+8; // get target of bl
 
-  //Trampoline jump
-  if(verifier!=(u_int)verify_code&&verifier!=(u_int)verify_code_vm&&verifier!=(u_int)verify_code_ds)
-      verifier=*((u_int*)(verifier+4));
+  uintptr_t source=0;
+  if((*ptr&0xffe00000)==0x52a00000){ //movz
+    assert((ptr[1]&0xffe00000)==0x72800000); //movk
+    source=(((ptr[0]>>5)&0xffff)<<16)|(ptr[1]>>5)&0xffff;
+    ptr+=2;
+  }
+  else if((*ptr&0x9f000000)==0x10000000){ //adr
+    source=(intptr_t)ptr+(((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3);
+    ptr++;
+  }
+  else if((*ptr&0x9f000000)==0x90000000){ //adrp
+    source=((intptr_t)ptr&(intptr_t)(~0xfff))+((((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3)<<12);
+    ptr++;
+    if((*ptr&0xff000000)==0x91000000){//add
+      source|=(*ptr>>10)&0xfff;
+      ptr++;
+    }
+  }
+  else
+    assert(0);
 
-  assert(verifier==(u_int)verify_code||verifier==(u_int)verify_code_vm||verifier==(u_int)verify_code_ds);
+  uintptr_t copy=0;
+  if((*ptr&0x9f000000)==0x10000000){ //adr
+    copy=(intptr_t)ptr+(((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3);
+    ptr++;
+  }
+  else if((*ptr&0x9f000000)==0x90000000){ //adrp
+    copy=((intptr_t)ptr&(intptr_t)(~0xfff))+((((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3)<<12);
+    ptr++;
+    if((*ptr&0xff000000)==0x91000000){//add
+      copy|=(*ptr>>10)&0xfff;
+      ptr++;
+    }
+  }
+  else
+    assert(0);
 
-  if(verifier==(u_int)verify_code_vm||verifier==(u_int)verify_code_ds) {
-    assert(0); //TOBEDONE
-    unsigned int page=source>>12;
-    unsigned int map_value=memory_map[page];
-    if(map_value>=0x80000000) return 0;
-    while(page<((source+len-1)>>12)) {
+  assert((*ptr&0xffe00000)==0x52800000); //movz
+  u_int len=(*ptr>>5)&0xffff;
+  ptr+=2;
+
+  if((*ptr&0xfc000000)!=0x94000000) ptr++;
+  assert((*ptr&0xfc000000)==0x94000000); // bl instruction
+
+  uintptr_t verifier=((signed int)(*ptr<<6)>>4)+(intptr_t)ptr;
+  assert(verifier==(uintptr_t)verify_code||verifier==(uintptr_t)verify_code_vm||verifier==(uintptr_t)verify_code_ds);
+
+  if(verifier==(uintptr_t)verify_code_vm||verifier==(uintptr_t)verify_code_ds) {
+    assert(0);
+    unsigned int page=(u_int)source>>12;
+    uint64_t map_value=memory_map[page];
+    if(map_value>=0x80000000) return 0; //TOBEDONE: Why 0x80000000?
+    while(page<(((u_int)source+len-1)>>12)) {
       if((memory_map[++page]<<2)!=(map_value<<2)) return 0;
     }
     source = source+(map_value<<2);
@@ -684,41 +704,47 @@ static int isclean(intptr_t addr)
   return 1;
 }
 
-static void get_bounds(int addr,uintptr_t *start,uintptr_t *end)
+static void get_bounds(intptr_t addr,uintptr_t *start,uintptr_t *end)
 {
-  assert(0);
   u_int *ptr=(u_int *)addr;
-  #ifdef ARMv5_ONLY
-  // get from literal pool
-  assert((*ptr&0xFFF00000)==0xe5900000);
-  u_int offset=*ptr&0xfff;
-  u_int *l_ptr=(void *)ptr+offset+8;
-  u_int source=l_ptr[0];
-  //u_int copy=l_ptr[1];
-  u_int len=l_ptr[2];
-  ptr+=4;
-  #else
-  // ARMv7 movw/movt
-  assert((*ptr&0xFFF00000)==0xe3000000);
-  u_int source=(ptr[0]&0xFFF)+((ptr[0]>>4)&0xF000)+((ptr[2]<<16)&0xFFF0000)+((ptr[2]<<12)&0xF0000000);
-  //u_int copy=(ptr[1]&0xFFF)+((ptr[1]>>4)&0xF000)+((ptr[3]<<16)&0xFFF0000)+((ptr[3]<<12)&0xF0000000);
-  u_int len=(ptr[4]&0xFFF)+((ptr[4]>>4)&0xF000);
-  ptr+=6;
-  #endif
-  if((*ptr&0xFF000000)!=0xeb000000) ptr++;
-  assert((*ptr&0xFF000000)==0xeb000000); // bl instruction
-  u_int verifier=(int)ptr+((signed int)(*ptr<<8)>>6)+8; // get target of bl
 
-  //Trampoline jump
-  if(verifier!=(u_int)verify_code&&verifier!=(u_int)verify_code_vm&&verifier!=(u_int)verify_code_ds)
-      verifier=*((u_int*)(verifier+4));
+  uintptr_t source=0;
+  if((*ptr&0xffe00000)==0x52a00000){ //movz
+    assert((ptr[1]&0xffe00000)==0x72800000); //movk
+    source=(((ptr[0]>>5)&0xffff)<<16)|(ptr[1]>>5)&0xffff;
+    ptr+=2;
+  }
+  else if((*ptr&0x9f000000)==0x10000000){ //adr
+    source=(intptr_t)ptr+(((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3);
+    ptr++;
+  }
+  else if((*ptr&0x9f000000)==0x90000000){ //adrp
+    source=((intptr_t)ptr&(intptr_t)(~0xfff))+((((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3)<<12);
+    ptr++;
+    if((*ptr&0xff000000)==0x91000000){//add
+      source|=(*ptr>>10)&0xfff;
+      ptr++;
+    }
+  }
+  else
+    assert(0);
 
-  assert(verifier==(u_int)verify_code||verifier==(u_int)verify_code_vm||verifier==(u_int)verify_code_ds);
+  ptr++;
+  if((*ptr&0xffe00000)!=0x52800000) ptr++;
+  assert((*ptr&0xffe00000)==0x52800000); //movz
+  u_int len=(*ptr>>5)&0xffff;
+  ptr+=2;
 
-  if(verifier==(u_int)verify_code_vm||verifier==(u_int)verify_code_ds) {
-    assert(0); //TOBEDONE
-    if(memory_map[source>>12]>=0x80000000) source = 0;
-    else source = source+(memory_map[source>>12]<<2);
+  if((*ptr&0xfc000000)!=0x94000000) ptr++;
+  assert((*ptr&0xfc000000)==0x94000000); // bl instruction
+
+  uintptr_t verifier=((signed int)(*ptr<<6)>>4)+(intptr_t)ptr;
+  assert(verifier==(uintptr_t)verify_code||verifier==(uintptr_t)verify_code_vm||verifier==(uintptr_t)verify_code_ds);
+
+  if(verifier==(uintptr_t)verify_code_vm||verifier==(uintptr_t)verify_code_ds) {
+    assert(0);
+    if(memory_map[source>>12]>=0x80000000) source=0;  //TOBEDONE: Why 0x80000000?
+    else source+=(memory_map[source>>12]<<2);
   }
   *start=source;
   *end=source+len;
