@@ -2075,6 +2075,16 @@ static void emit_shlimm(int rs,u_int imm,int rt)
   output_w32(0x53000000|((31-imm)+1)<<16|(31-imm)<<10|rs<<5|rt);
 }
 
+static void emit_shlimm64(int rs,u_int imm,int rt)
+{
+  assert(rs!=29);
+  assert(rt!=29);
+  assert(imm>0);
+  assert(imm<64);
+  assem_debug("lsl %s,%s,#%d",regname[rt],regname[rs],imm);
+  output_w32(0xd3400000|((63-imm)+1)<<16|(63-imm)<<10|rs<<5|rt);
+}
+
 static void emit_shrimm(int rs,u_int imm,int rt)
 {
   assert(rs!=29);
@@ -2083,6 +2093,16 @@ static void emit_shrimm(int rs,u_int imm,int rt)
   assert(imm<32);
   assem_debug("lsr %s,%s,#%d",regname[rt],regname[rs],imm);
   output_w32(0x53000000|imm<<16|0x1f<<10|rs<<5|rt);
+}
+
+static void emit_shrimm64(int rs,u_int imm,int rt)
+{
+  assert(rs!=29);
+  assert(rt!=29);
+  assert(imm>0);
+  assert(imm<64);
+  assem_debug("lsr %s,%s,#%d",regname[rt],regname[rs],imm);
+  output_w32(0xd3400000|imm<<16|0x3f<<10|rs<<5|rt);
 }
 
 static void emit_sarimm(int rs,u_int imm,int rt)
@@ -2296,7 +2316,6 @@ static void emit_cmovs_reg(int rs,int rt)
 
 static void emit_slti32(int rs,int imm,int rt)
 {
-  assert(0);
   assert(rs!=29);
   assert(rt!=29);
   if(rs!=rt) emit_zeroreg(rt);
@@ -2315,7 +2334,6 @@ static void emit_sltiu32(int rs,int imm,int rt)
 }
 static void emit_slti64_32(int rsh,int rsl,int imm,int rt)
 {
-  assert(0);
   assert(rsh!=29);
   assert(rsl!=29);
   assert(rt!=29);
@@ -2844,18 +2862,21 @@ static void emit_writebyte_dualindexedx4(int rt, int rs1, int rs2)
 }
 static void emit_writebyte_indexed_tlb(int rt, int addr, int rs, int map, int temp)
 {
-  assert(0);
-  assert(rt!=29);
-  assert(rs!=29);
-  assert(map!=29);
-  assert(temp!=29);
+  assert(rt!=29&&rt!=HOST_TEMPREG);
+  assert(rs!=29&&rt!=HOST_TEMPREG);
+  assert(map!=29&&rt!=HOST_TEMPREG);
+  assert(temp!=29&&rt!=HOST_TEMPREG);
   if(map<0) emit_writebyte_indexed(rt, addr, rs);
   else {
     if(addr==0) {
-      emit_writebyte_dualindexedx4(rt, rs, map);
+      emit_shlimm64(map,2,HOST_TEMPREG);
+      assem_debug("strb %s,[%s,%s]",regname[rt],regname64[rs],regname64[HOST_TEMPREG]);
+      output_w32(0x38207800|HOST_TEMPREG<<16|rs<<5|rt);
     }else{
       emit_addimm(rs,addr,temp);
-      emit_writebyte_dualindexedx4(rt, temp, map);
+      emit_shlimm64(map,2,HOST_TEMPREG);
+      assem_debug("strb %s,[%s,%s]",regname[rt],regname64[temp],regname64[HOST_TEMPREG]);
+      output_w32(0x38207800|HOST_TEMPREG<<16|temp<<5|rt);
     }
   }
 }
@@ -2904,15 +2925,13 @@ static void emit_mul(u_int rs1,u_int rs2,u_int rt)
   assem_debug("mul %s,%s,%s",regname[rt],regname[rs1],regname[rs2]);
   output_w32(0xe0000090|(rt<<16)|(rs2<<8)|rs1);
 }
-static void emit_umull(u_int rs1, u_int rs2, u_int high, u_int low)
+static void emit_umull(u_int rs1, u_int rs2, u_int rt)
 {
-  assert(0);
-  assem_debug("umull %s, %s, %s, %s",regname[low],regname[high],regname[rs1],regname[rs2]);
+  assem_debug("umull %s, %s, %s",regname[rt],regname[rs1],regname[rs2]);
   assert(rs1!=29);
   assert(rs2!=29);
-  assert(high!=29);
-  assert(low!=29);
-  output_w32(0xe0800090|(high<<16)|(low<<12)|(rs2<<8)|rs1);
+  assert(rt!=29);
+  output_w32(0x9ba00000|(rs2<<16)|(WZR<<10)|(rs1<<5)|rt);
 }
 static void emit_umlal(u_int rs1, u_int rs2, u_int high, u_int low)
 {
@@ -5200,7 +5219,6 @@ static void float_assemble(int i,struct regstat *i_regs)
 
 static void multdiv_assemble_arm(int i,struct regstat *i_regs)
 {
-  assert(0);
   //  case 0x18: MULT
   //  case 0x19: MULTU
   //  case 0x1A: DIV
@@ -5235,7 +5253,9 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
         assert(m2>=0);
         assert(high>=0);
         assert(low>=0);
-        emit_umull(m1,m2,high,low);
+        emit_umull(m1,m2,HOST_TEMPREG);
+        emit_mov(HOST_TEMPREG,low);
+        emit_shrimm64(HOST_TEMPREG,32,high);
       }
       if(opcode2[i]==0x1A) // DIV
       {
@@ -5317,6 +5337,7 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
     }
     else // 64-bit
     {
+      assert(0);
       if(opcode2[i]==0x1C) // DMULT
       {
         signed char m1h=get_reg(i_regs->regmap,rs1[i]|64);
@@ -5332,7 +5353,7 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
         assert(rh>=0);
         assert(rl>=0);
 
-        emit_umull(m1l,m2l,rh,rl);
+        /*emit_umull(m1l,m2l,rh,rl);
         emit_storereg(LOREG,rl);
         emit_mov(rh,rl);
         emit_zeroreg(rh);
@@ -5349,7 +5370,7 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
         emit_adds(HOST_TEMPREG,rh,HOST_TEMPREG);
         emit_addsarimm(rl,rh,rh,31);
         emit_mov(HOST_TEMPREG,rl);
-        emit_smlal(m1h,m2h,rh,rl);
+        emit_smlal(m1h,m2h,rh,rl);*/
       }
       if(opcode2[i]==0x1D) // DMULTU
       {
@@ -5366,7 +5387,7 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
         assert(rh>=0);
         assert(rl>=0);
         
-        emit_umull(m1l,m2l,rh,rl);
+        /*emit_umull(m1l,m2l,rh,rl);
         emit_storereg(LOREG,rl);
         emit_mov(rh,rl);
         emit_zeroreg(rh);
@@ -5379,7 +5400,7 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
         emit_adds(HOST_TEMPREG,rh,HOST_TEMPREG);
         emit_adcimm(rl,0,rh);
         emit_mov(HOST_TEMPREG,rl);
-        emit_umlal(m1h,m2h,rh,rl);
+        emit_umlal(m1h,m2h,rh,rl);*/
       }
       if(opcode2[i]==0x1E) // DDIV
       {
@@ -5459,37 +5480,39 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
 #define multdiv_assemble multdiv_assemble_arm
 
 static void do_preload_rhash(int r) {
-  assert(0);
-  // Don't need this for ARM.  On x86, this puts the value 0xf8 into the
-  // register.  On ARM the hash can be done with a single instruction (below)
+  // Don't need this for ARM64.  On x86, this puts the value 0xf8 into the
+  // register. On ARM64 the hash can be done with a single instruction (below)
 }
 
 static void do_preload_rhtbl(int ht) {
-  assert(0);
-  emit_addimm(FP,(int)&mini_ht-(int)&dynarec_local,ht);
+  emit_addimm64(FP,(intptr_t)&mini_ht-(intptr_t)&dynarec_local,ht);
 }
 
 static void do_rhash(int rs,int rh) {
-  assert(0);
   emit_andimm(rs,0xf8,rh);
+  emit_shlimm(rh,1,rh);
 }
 
 static void do_miniht_load(int ht,int rh) {
-  assert(0);
-  assem_debug("ldr %s,[%s,%s]!",regname[rh],regname[ht],regname[rh]);
-  output_w32(0xe7b00000|rd_rn_rm(rh,ht,rh));
+  assem_debug("add %s,%s,%s",regname64[ht],regname64[ht],regname64[rh]);
+  output_w32(0x8b000000|rh<<16|ht<<5|ht);
+  assem_debug("ldr %s,[%s]",regname[rh],regname64[ht]);
+  output_w32(0xb9400000|ht<<5|rh);
 }
 
 static void do_miniht_jump(int rs,int rh,int ht) {
-  assert(0);
   emit_cmp(rh,rs);
-  emit_ldreq_indexed(ht,4,15);
   #ifdef CORTEX_A8_BRANCH_PREDICTION_HACK
+  emit_jeq((intptr_t)out+12);
   emit_mov(rs,7);
   emit_jmp(jump_vaddr_reg[7]);
   #else
+  emit_jeq((intptr_t)out+8);
   emit_jmp(jump_vaddr_reg[rs]);
   #endif
+  assem_debug("ldr %s,[%s,#8]",regname64[ht],regname64[ht]);
+  output_w32(0xf9400000|(8>>3)<<10|ht<<5|ht);
+  emit_jmpreg(ht);
 }
 
 static void do_miniht_insert(u_int return_address,int rt,int temp) {
