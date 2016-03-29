@@ -82,6 +82,7 @@ static Function_t func[] = {
   {(intptr_t)jump_vaddr, "jump_vaddr"},
   {(intptr_t)indirect_jump_indexed, "indirect_jump_indexed"},
   {(intptr_t)indirect_jump, "indirect_jump"},
+#if NEW_DYNAREC_PROFILER == NEW_DYNAREC_ARM64
   {(intptr_t)jump_vaddr_x0, "jump_vaddr_x0"},
   {(intptr_t)jump_vaddr_x1, "jump_vaddr_x1"},
   {(intptr_t)jump_vaddr_x2, "jump_vaddr_x2"},
@@ -140,6 +141,32 @@ static Function_t func[] = {
   {(intptr_t)invalidate_addr_x26," invalidate_addr_x26"},
   {(intptr_t)invalidate_addr_x27," invalidate_addr_x27"},
   {(intptr_t)invalidate_addr_x28," invalidate_addr_x28"},
+#else
+  {(intptr_t)jump_vaddr_r0, "jump_vaddr_r0"},
+  {(intptr_t)jump_vaddr_r1, "jump_vaddr_r1"},
+  {(intptr_t)jump_vaddr_r2, "jump_vaddr_r2"},
+  {(intptr_t)jump_vaddr_r3, "jump_vaddr_r3"},
+  {(intptr_t)jump_vaddr_r4, "jump_vaddr_r4"},
+  {(intptr_t)jump_vaddr_r5, "jump_vaddr_r5"},
+  {(intptr_t)jump_vaddr_r6, "jump_vaddr_r6"},
+  {(intptr_t)jump_vaddr_r7, "jump_vaddr_r7"},
+  {(intptr_t)jump_vaddr_r8, "jump_vaddr_r8"},
+  {(intptr_t)jump_vaddr_r9, "jump_vaddr_r9"},
+  {(intptr_t)jump_vaddr_r10, "jump_vaddr_r10"},
+  {(intptr_t)jump_vaddr_r12, "jump_vaddr_r12"},
+  {(intptr_t)invalidate_addr_r0," invalidate_addr_r0"},
+  {(intptr_t)invalidate_addr_r1," invalidate_addr_r1"},
+  {(intptr_t)invalidate_addr_r2," invalidate_addr_r2"},
+  {(intptr_t)invalidate_addr_r3," invalidate_addr_r3"},
+  {(intptr_t)invalidate_addr_r4," invalidate_addr_r4"},
+  {(intptr_t)invalidate_addr_r5," invalidate_addr_r5"},
+  {(intptr_t)invalidate_addr_r6," invalidate_addr_r6"},
+  {(intptr_t)invalidate_addr_r7," invalidate_addr_r7"},
+  {(intptr_t)invalidate_addr_r8," invalidate_addr_r8"},
+  {(intptr_t)invalidate_addr_r9," invalidate_addr_r9"},
+  {(intptr_t)invalidate_addr_r10," invalidate_addr_r10"},
+  {(intptr_t)invalidate_addr_r12," invalidate_addr_r12"},
+#endif
 #else
   {(intptr_t)jump_vaddr_eax, "jump_vaddr_eax"},
   {(intptr_t)jump_vaddr_ecx, "jump_vaddr_ecx"},
@@ -257,7 +284,6 @@ void profiler_init(void)
 {
   if(cs_open(ARCHITECTURE, MODE, &handle) != CS_ERR_OK) return;
   cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
-  pFile = fopen ("profiler.txt","w");
   base_addr = extra_memory;
   new_dynarec_init();
 
@@ -272,7 +298,6 @@ void profiler_cleanup(void)
   if(handle == 0) return;
   new_dynarec_cleanup();
   cs_close(&handle);
-  fclose(pFile);
 }
 
 void profiler_block(int addr)
@@ -283,10 +308,12 @@ void profiler_block(int addr)
   size_t count;
   int32_t size = 0;
   int32_t sum = 0;
+  char filename[16];
 
   if(handle == 0) return;
 
-  fprintf(pFile, "Recompiled block: 0x%.8x\n", addr);
+  sprintf(filename, "%.8x.txt", addr);
+  pFile = fopen (filename,"w");
   beginning=(uint32_t *)out;
   new_recompile_block(addr);
   end=(uint32_t *)out;
@@ -349,6 +376,36 @@ void profiler_block(int addr)
 
   cs_free(insn, count);
   fflush(pFile);
+  fclose(pFile);
+
+  /*for(int i=0;i<linkcount;i++){
+    if(!link_addr[i][2])
+      dynamic_linker((void*)link_addr[i][0],0xa4000044);
+  }
+
+  struct ll_entry *head;
+  head=jump_out[0x800];
+  while(head!=NULL) {
+    intptr_t addr=get_pointer(head->addr);
+    addr=(intptr_t)kill_pointer(head->addr);
+    head=head->next;
+  }
+
+  head=jump_dirty[0x800];
+  while(head!=NULL) {
+    assert(verify_dirty(head->addr));
+    uintptr_t start,end;
+    get_bounds((intptr_t)head->addr, &start, &end);
+    assert(!isclean((intptr_t)head->addr));
+    uintptr_t clean=get_clean_addr((intptr_t)head->addr);
+    head=head->next;
+  }
+
+  head=jump_in[0x800];
+  while(head!=NULL) {
+    assert(isclean((intptr_t)head->addr));
+    head=head->next;
+  }*/
 }
 
 #endif

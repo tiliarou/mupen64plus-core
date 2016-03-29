@@ -72,12 +72,12 @@ BSS_SECTION
     GLOBAL_VARIABLE(PC, 8)
     GLOBAL_VARIABLE(fake_pc, 208)
     GLOBAL_VARIABLE(ram_offset, 8)
-    GLOBAL_VARIABLE(mini_ht, 256)
+    GLOBAL_VARIABLE(mini_ht, 512)
     GLOBAL_VARIABLE(restore_candidate, 512)
     GLOBAL_VARIABLE(memory_map, 8388608)
 
 extra_memory:
-    .space    33554432+256+4+4+4+4+4+4+8+8+8+8+4+2+4+4+4+256+8+8+128+256+256+16+8+8+192+8+256+512+8388608
+    .space    33554432+256+4+4+4+4+4+4+8+8+8+8+4+2+4+4+4+256+8+8+128+256+256+16+8+8+192+8+512+512+8388608
 
     dynarec_local     = extra_memory      + 33554432
     next_interupt     = dynarec_local     + 256
@@ -107,7 +107,7 @@ extra_memory:
     fake_pc           = PC                + 8
     ram_offset        = fake_pc           + 208
     mini_ht           = ram_offset        + 8
-    restore_candidate = mini_ht           + 256
+    restore_candidate = mini_ht           + 512
     memory_map        = restore_candidate + 512
 
 END_SECTION

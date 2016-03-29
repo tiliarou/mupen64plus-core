@@ -102,7 +102,7 @@ typedef struct
   uint64_t PC; //precomp_instr * PC;
   precomp_instr fake_pc;
   uint64_t ram_offset;
-  u_int mini_ht[32][2];
+  uint64_t mini_ht[32][2];
   u_char restore_candidate[512];
   uint64_t memory_map[1048576];
 }profiler_t;

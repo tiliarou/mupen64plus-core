@@ -143,7 +143,7 @@ extern uint64_t readmem_dword;
 extern precomp_instr fake_pc;
 extern void *dynarec_local;
 extern uint64_t memory_map[1048576];
-extern u_int mini_ht[32][2];
+extern uint64_t mini_ht[32][2];
 extern u_int rounding_modes[4];
 extern u_char restore_candidate[512];
 

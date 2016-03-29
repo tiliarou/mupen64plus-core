@@ -6219,7 +6219,9 @@ static void pagespan_assemble(int i,struct regstat *i_regs)
     s1h=s2h=-1;
   }
   int hr=0;
-  int addr,alt,ntaddr;
+  int addr=0;
+  int alt=0;
+  int ntaddr=0;
   if(i_regs->regmap[HOST_BTREG]<0) {addr=HOST_BTREG;}
   else {
     while(hr<HOST_REGS)
