@@ -84,9 +84,6 @@ static void set_jump_target(int addr,int target)
 
 static void *dynamic_linker(void * src, u_int vaddr)
 {
-#ifdef NEW_DYNAREC_DEBUG
-  print_debug_info(vaddr);
-#endif
   u_int page=(vaddr^0x80000000)>>12;
   u_int vpage=page;
   if(page>262143&&tlb_LUT_r[vaddr>>12]) page=(tlb_LUT_r[vaddr>>12]^0x80000000)>>12;
@@ -106,14 +103,27 @@ static void *dynamic_linker(void * src, u_int vaddr)
       add_link(vaddr, ptr2);
       u_int offset=(u_int)head->addr-(u_int)ptr-4;
       *ptr=offset;
+      #ifdef NEW_DYNAREC_DEBUG
+      print_debug_info(vaddr);
+      #endif
       return head->addr;
     }
     head=head->next;
   }
 
   u_int *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
-  if(ht_bin[0]==vaddr) return (void *)ht_bin[1];
-  if(ht_bin[2]==vaddr) return (void *)ht_bin[3];
+  if(ht_bin[0]==vaddr){
+    #ifdef NEW_DYNAREC_DEBUG
+    print_debug_info(vaddr);
+    #endif
+    return (void *)ht_bin[1];
+  }
+  if(ht_bin[2]==vaddr){
+    #ifdef NEW_DYNAREC_DEBUG
+    print_debug_info(vaddr);
+    #endif
+    return (void *)ht_bin[3];
+  }
 
   head=jump_dirty[vpage];
   while(head!=NULL) {
@@ -144,6 +154,9 @@ static void *dynamic_linker(void * src, u_int vaddr)
             ht_bin[1]=(int)head->addr;
             ht_bin[0]=vaddr;
           }
+          #ifdef NEW_DYNAREC_DEBUG
+          print_debug_info(vaddr);
+          #endif
           return head->addr;
         }
       }
@@ -165,9 +178,6 @@ static void *dynamic_linker(void * src, u_int vaddr)
 
 static void *dynamic_linker_ds(void * src, u_int vaddr)
 {
-#ifdef NEW_DYNAREC_DEBUG
-  print_debug_info(vaddr);
-#endif
   u_int page=(vaddr^0x80000000)>>12;
   u_int vpage=page;
   if(page>262143&&tlb_LUT_r[vaddr>>12]) page=(tlb_LUT_r[vaddr>>12]^0x80000000)>>12;
@@ -187,14 +197,27 @@ static void *dynamic_linker_ds(void * src, u_int vaddr)
       add_link(vaddr, ptr2);
       u_int offset=(u_int)head->addr-(u_int)ptr-4;
       *ptr=offset;
+      #ifdef NEW_DYNAREC_DEBUG
+      print_debug_info(vaddr);
+      #endif
       return head->addr;
     }
     head=head->next;
   }
 
   u_int *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
-  if(ht_bin[0]==vaddr) return (void *)ht_bin[1];
-  if(ht_bin[2]==vaddr) return (void *)ht_bin[3];
+  if(ht_bin[0]==vaddr){
+    #ifdef NEW_DYNAREC_DEBUG
+    print_debug_info(vaddr);
+    #endif
+    return (void *)ht_bin[1];
+  }
+  if(ht_bin[2]==vaddr){
+    #ifdef NEW_DYNAREC_DEBUG
+    print_debug_info(vaddr);
+    #endif
+    return (void *)ht_bin[3];
+  }
 
   head=jump_dirty[vpage];
   while(head!=NULL) {
@@ -225,6 +248,9 @@ static void *dynamic_linker_ds(void * src, u_int vaddr)
             ht_bin[1]=(int)head->addr;
             ht_bin[0]=vaddr;
           }
+          #ifdef NEW_DYNAREC_DEBUG
+          print_debug_info(vaddr);
+          #endif
           return head->addr;
         }
       }

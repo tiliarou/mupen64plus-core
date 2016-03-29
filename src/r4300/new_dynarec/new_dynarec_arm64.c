@@ -372,9 +372,6 @@ static void tlb_hacks(void)
 // This is called from the recompiled JR/JALR instructions
 void *get_addr(u_int vaddr)
 {
-#ifdef NEW_DYNAREC_DEBUG
-  print_debug_info(vaddr);
-#endif
   u_int page=(vaddr^0x80000000)>>12;
   u_int vpage=page;
   if(page>262143&&tlb_LUT_r[vaddr>>12]) page=(tlb_LUT_r[vaddr>>12]^0x80000000)>>12;
@@ -392,6 +389,9 @@ void *get_addr(u_int vaddr)
       ht_bin[2]=ht_bin[0];
       ht_bin[1]=(intptr_t)head->addr;
       ht_bin[0]=vaddr;
+      #ifdef NEW_DYNAREC_DEBUG
+      print_debug_info(vaddr);
+      #endif
       return head->addr;
     }
     head=head->next;
@@ -425,6 +425,9 @@ void *get_addr(u_int vaddr)
             ht_bin[1]=(intptr_t)head->addr;
             ht_bin[0]=vaddr;
           }
+          #ifdef NEW_DYNAREC_DEBUG
+          print_debug_info(vaddr);
+          #endif
           return head->addr;
         }
       }
@@ -446,21 +449,25 @@ void *get_addr(u_int vaddr)
 // Look up address in hash table first
 void *get_addr_ht(u_int vaddr)
 {
-#ifdef NEW_DYNAREC_DEBUG
-  print_debug_info(vaddr);
-#endif
   //DebugMessage(M64MSG_VERBOSE, "TRACE: count=%d next=%d (get_addr_ht %x)",g_cp0_regs[CP0_COUNT_REG],next_interupt,vaddr);
   uintptr_t *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
-  if(ht_bin[0]==vaddr) return (void *)ht_bin[1];
-  if(ht_bin[2]==vaddr) return (void *)ht_bin[3];
+  if(ht_bin[0]==vaddr){
+    #ifdef NEW_DYNAREC_DEBUG
+    print_debug_info(vaddr);
+    #endif
+    return (void *)ht_bin[1];
+  }
+  if(ht_bin[2]==vaddr){
+    #ifdef NEW_DYNAREC_DEBUG
+    print_debug_info(vaddr);
+    #endif
+    return (void *)ht_bin[3];
+  }
   return get_addr(vaddr);
 }
 
 void *get_addr_32(u_int vaddr,u_int flags)
 {
-#ifdef NEW_DYNAREC_DEBUG
-  print_debug_info(vaddr);
-#endif
   //DebugMessage(M64MSG_VERBOSE, "TRACE: count=%d next=%d (get_addr_32 %x,flags %x)",g_cp0_regs[CP0_COUNT_REG],next_interupt,vaddr,flags);
   uintptr_t *ht_bin=hash_table[((vaddr>>16)^vaddr)&0xFFFF];
   if(ht_bin[0]==vaddr) return (void *)ht_bin[1];
@@ -490,6 +497,9 @@ void *get_addr_32(u_int vaddr,u_int flags)
         //ht_bin[1]=(intptr_t)head->addr;
         //ht_bin[0]=vaddr;
       }
+      #ifdef NEW_DYNAREC_DEBUG
+      print_debug_info(vaddr);
+      #endif
       return head->addr;
     }
     head=head->next;
@@ -526,6 +536,9 @@ void *get_addr_32(u_int vaddr,u_int flags)
             //ht_bin[1]=(intptr_t)head->addr;
             //ht_bin[0]=vaddr;
           }
+          #ifdef NEW_DYNAREC_DEBUG
+          print_debug_info(vaddr);
+          #endif
           return head->addr;
         }
       }
