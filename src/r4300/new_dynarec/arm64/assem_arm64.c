@@ -2160,13 +2160,12 @@ static void emit_shrdimm(int rs,int rs2,u_int imm,int rt)
 
 static void emit_shl(u_int rs,u_int shift,u_int rt)
 {
-  assert(0);
   assert(rs!=29);
   assert(rt!=29);
   assert(shift!=29);
   //if(imm==1) ...
   assem_debug("lsl %s,%s,%s",regname[rt],regname[rs],regname[shift]);
-  output_w32(0xe1a00000|rd_rn_rm(rt,0,rs)|0x10|(shift<<8));
+  output_w32(0x1ac02000|shift<<16|rs<<5|rt);
 }
 static void emit_shr(u_int rs,u_int shift,u_int rt)
 {
@@ -2178,12 +2177,11 @@ static void emit_shr(u_int rs,u_int shift,u_int rt)
 }
 static void emit_sar(u_int rs,u_int shift,u_int rt)
 {
-  assert(0);
   assert(rs!=29);
   assert(rt!=29);
   assert(shift!=29);
   assem_debug("asr %s,%s,%s",regname[rt],regname[rs],regname[shift]);
-  output_w32(0xe1a00000|rd_rn_rm(rt,0,rs)|0x50|(shift<<8));
+  output_w32(0x1ac02800|shift<<16|rs<<5|rt);
 }
 
 static void emit_orrshl(u_int rs,u_int shift,u_int rt)
@@ -4244,7 +4242,6 @@ static void generate_map_const(u_int addr,int tr) {
 
 static void shift_assemble_arm(int i,struct regstat *i_regs)
 {
-  assert(0);
   if(rt1[i]) {
     if(opcode2[i]<=0x07) // SLLV/SRLV/SRAV
     {
