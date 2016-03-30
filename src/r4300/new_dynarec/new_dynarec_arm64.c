@@ -10893,7 +10893,7 @@ int new_recompile_block(int addr)
 #if NEW_DYNAREC==NEW_DYNAREC_ARM64
       //TOBEDONE: Avoid disabling link between blocks for conditional branches
       u_char *ptr=(u_char *)link_addr[i][0];
-      if(addr&&ptr[3]==0x14) {
+      if(addr&&((ptr[3]&0xfc)==0x14)) {
 #else
       if(addr) {
 #endif

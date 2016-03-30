@@ -2081,7 +2081,7 @@ static void emit_shlimm64(int rs,u_int imm,int rt)
   assert(rt!=29);
   assert(imm>0);
   assert(imm<64);
-  assem_debug("lsl %s,%s,#%d",regname[rt],regname[rs],imm);
+  assem_debug("lsl %s,%s,#%d",regname64[rt],regname64[rs],imm);
   output_w32(0xd3400000|((63-imm)+1)<<16|(63-imm)<<10|rs<<5|rt);
 }
 
@@ -2101,7 +2101,7 @@ static void emit_shrimm64(int rs,u_int imm,int rt)
   assert(rt!=29);
   assert(imm>0);
   assert(imm<64);
-  assem_debug("lsr %s,%s,#%d",regname[rt],regname[rs],imm);
+  assem_debug("lsr %s,%s,#%d",regname64[rt],regname64[rs],imm);
   output_w32(0xd3400000|imm<<16|0x3f<<10|rs<<5|rt);
 }
 
@@ -2423,7 +2423,6 @@ static void emit_set_nz64_32(int rsh, int rsl, int rt)
 }
 static void emit_set_if_less32(int rs1, int rs2, int rt)
 {
-  assert(0);
   assert(rs1!=29);
   assert(rs2!=29);
   assert(rt!=29);
@@ -2435,7 +2434,6 @@ static void emit_set_if_less32(int rs1, int rs2, int rt)
 }
 static void emit_set_if_carry32(int rs1, int rs2, int rt)
 {
-  assert(0);
   assert(rs1!=29);
   assert(rs2!=29);
   assert(rt!=29);
@@ -2690,17 +2688,20 @@ static void emit_movzbl_dualindexedx4(int rs1, int rs2, int rt)
 }
 static void emit_movzbl_indexed_tlb(int addr, int rs, int map, int rt)
 {
-  assert(0);
-  assert(rs!=29);
-  assert(map!=29);
-  assert(rt!=29);
+  assert(rt!=29&&rt!=HOST_TEMPREG);
+  assert(rs!=29&&rt!=HOST_TEMPREG);
+  assert(map!=29&&rt!=HOST_TEMPREG);
   if(map<0) emit_movzbl_indexed(addr, rs, rt);
   else {
     if(addr==0) {
-      emit_movzbl_dualindexedx4(rs, map, rt);
+      emit_shlimm64(map,2,HOST_TEMPREG);
+      assem_debug("ldrb %s,[%s,%s]",regname[rt],regname64[rs],regname64[HOST_TEMPREG]);
+      output_w32(0x38606800|HOST_TEMPREG<<16|rs<<5|rt);
     }else{
       emit_addimm(rs,addr,rt);
-      emit_movzbl_dualindexedx4(rt, map, rt);
+      emit_shlimm64(map,2,HOST_TEMPREG);
+      assem_debug("ldrb %s,[%s,%s]",regname[rt],regname64[rt],regname64[HOST_TEMPREG]);
+      output_w32(0x38606800|HOST_TEMPREG<<16|rt<<5|rt);
     }
   }
 }
@@ -2744,14 +2745,13 @@ static void emit_movswl(int addr, int rt)
   assem_debug("ldrsh %s,fp+%d",regname[rt],offset);
   output_w32(0xe1d000f0|rd_rn_rm(rt,FP,0)|((offset<<4)&0xf00)|(offset&0xf));
 }
-static void emit_movzbl(int addr, int rt)
+static void emit_movzbl(intptr_t addr, int rt)
 {
-  assert(0);
   assert(rt!=29);
-  u_int offset = addr-(u_int)&dynarec_local;
+  u_int offset = addr-(uintptr_t)&dynarec_local;
   assert(offset<4096);
   assem_debug("ldrb %s,fp+%d",regname[rt],offset);
-  output_w32(0xe5d00000|rd_rn_rm(rt,FP,0)|offset);
+  output_w32(0x39400000|offset<<10|FP<<5|rt);
 }
 static void emit_movzwl(int addr, int rt)
 {
@@ -2871,12 +2871,12 @@ static void emit_writebyte_indexed_tlb(int rt, int addr, int rs, int map, int te
     if(addr==0) {
       emit_shlimm64(map,2,HOST_TEMPREG);
       assem_debug("strb %s,[%s,%s]",regname[rt],regname64[rs],regname64[HOST_TEMPREG]);
-      output_w32(0x38207800|HOST_TEMPREG<<16|rs<<5|rt);
+      output_w32(0x38206800|HOST_TEMPREG<<16|rs<<5|rt);
     }else{
       emit_addimm(rs,addr,temp);
       emit_shlimm64(map,2,HOST_TEMPREG);
       assem_debug("strb %s,[%s,%s]",regname[rt],regname64[temp],regname64[HOST_TEMPREG]);
-      output_w32(0x38207800|HOST_TEMPREG<<16|temp<<5|rt);
+      output_w32(0x38206800|HOST_TEMPREG<<16|temp<<5|rt);
     }
   }
 }
@@ -3685,7 +3685,7 @@ static void literal_pool_jumpover(int n)
 static void emit_extjump2(intptr_t addr, int target, intptr_t linker)
 {
   u_char *ptr=(u_char *)addr;
-  assert(ptr[3]==0x14);
+  assert(((ptr[3]&0xfc)==0x14)||((ptr[3]&0xff)==0x54)); //b or b.cond
 
   emit_movz_lsl16(((u_int)target>>16)&0xffff,1);
   emit_movk((u_int)target&0xffff,1);
