@@ -1571,11 +1571,10 @@ static void emit_sbcs(int rs1,int rs2,int rt)
 
 static void emit_neg(int rs, int rt)
 {
-  assert(0);
   assert(rs!=29);
   assert(rt!=29);
-  assem_debug("rsb %s,%s,#0",regname[rt],regname[rs]);
-  output_w32(0xe2600000|rd_rn_rm(rt,rs,0));
+  assem_debug("neg %s,%s",regname[rt],regname[rs]);
+  output_w32(0x4b000000|rs<<16|WZR<<5|rt);
 }
 
 static void emit_negs(int rs, int rt)
@@ -2569,16 +2568,11 @@ static void emit_jmpreg(u_int r)
 }
 static void emit_readword_indexed(int offset, int rs, int rt)
 {
-  assert(0);
   assert(rs!=29);
   assert(rt!=29);
-  assert(offset>-4096&&offset<4096);
-  assem_debug("ldr %s,%s+%d",regname[rt],regname[rs],offset);
-  if(offset>=0) {
-    output_w32(0xe5900000|rd_rn_rm(rt,rs,0)|offset);
-  }else{
-    output_w32(0xe5100000|rd_rn_rm(rt,rs,0)|(-offset));
-  }
+  assert(offset>-256&&offset<256);
+  assem_debug("ldur %s,%s+%d",regname[rt],regname64[rs],offset);
+  output_w32(0xb8400000|((u_int)offset&0x1ff)<<12|rs<<5|rt);
 }
 static void emit_readword_dualindexedx4(int rs1, int rs2, int rt)
 {
@@ -4171,10 +4165,9 @@ static int do_tlb_r_branch(int map, int c, u_int addr, intptr_t *jaddr)
 }
 
 static void gen_tlb_addr_r(int ar, int map) {
-  assert(0);
   if(map>=0) {
-    assem_debug("add %s,%s,%s lsl #2",regname[ar],regname[ar],regname[map]);
-    output_w32(0xe0800100|rd_rn_rm(ar,ar,map));
+    assem_debug("add %s,%s,%s lsl #2",regname64[ar],regname64[ar],regname64[map]);
+    output_w32(0x8b000000|map<<16|2<<10|ar<<5|ar);
   }
 }
 
@@ -4216,9 +4209,8 @@ static void do_tlb_w_branch(int map, int c, u_int addr, intptr_t *jaddr)
 
 static void gen_tlb_addr_w(int ar, int map) {
   if(map>=0) {
-    assert(0);
-    assem_debug("add %s,%s,%s lsl #2",regname[ar],regname[ar],regname[map]);
-    output_w32(0xe0800100|rd_rn_rm(ar,ar,map));
+    assem_debug("add %s,%s,%s lsl #2",regname64[ar],regname64[ar],regname64[map]);
+    output_w32(0x8b000000|map<<16|2<<10|ar<<5|ar);
   }
 }
 

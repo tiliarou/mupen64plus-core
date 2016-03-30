@@ -4059,6 +4059,9 @@ static void address_generation(int i,struct regstat *i_regs,signed char entry[])
         }
         if(rs1[i]!=rt1[i]||itype[i]!=LOAD) {
           if(!entry||entry[ra]!=agr) {
+            #ifdef RAM_OFFSET
+            int map=get_reg(i_regs->regmap,ROREG);
+            #endif
             if (opcode[i]==0x22||opcode[i]==0x26) { // LWL/LWR
               #ifdef RAM_OFFSET
               if((signed int)constmap[i][rs]+offset<(signed int)0x80800000) {
@@ -4082,8 +4085,13 @@ static void address_generation(int i,struct regstat *i_regs,signed char entry[])
               #endif
               #ifdef RAM_OFFSET
               if((itype[i]==LOAD||opcode[i]==0x31||opcode[i]==0x35)&&(signed int)constmap[i][rs]+offset<(signed int)0x80800000) {
-                assert(0); //TOBEDONE
+                #if NEW_DYNAREC==NEW_DYNAREC_ARM64
+                if(map<0) emit_loadreg(ROREG,map=HOST_TEMPREG);
+                emit_movimm(constmap[i][rs]+offset,ra);
+                gen_tlb_addr_r(ra,map);
+                #else
                 emit_movimm(constmap[i][rs]+offset+(intptr_t)g_rdram-0x80000000,ra);
+                #endif
               }else
               #endif
               emit_movimm(constmap[i][rs]+offset,ra);
@@ -4136,6 +4144,9 @@ static void address_generation(int i,struct regstat *i_regs,signed char entry[])
       int offset=imm[i+1];
       int c=(regs[i+1].wasconst>>rs)&1;
       if(c&&(rs1[i+1]!=rt1[i+1]||itype[i+1]!=LOAD)) {
+        #ifdef RAM_OFFSET
+        int map=get_reg(i_regs->regmap,ROREG);
+        #endif
         if (opcode[i+1]==0x22||opcode[i+1]==0x26) { // LWL/LWR
           #ifdef RAM_OFFSET
           if((signed int)constmap[i+1][rs]+offset<(signed int)0x80800000) {
@@ -4159,8 +4170,13 @@ static void address_generation(int i,struct regstat *i_regs,signed char entry[])
           #endif
           #ifdef RAM_OFFSET
           if((itype[i+1]==LOAD||opcode[i+1]==0x31||opcode[i+1]==0x35)&&(signed int)constmap[i+1][rs]+offset<(signed int)0x80800000) {
-            assert(0); //TOBEDONE
+            #if NEW_DYNAREC==NEW_DYNAREC_ARM64
+            if(map<0) emit_loadreg(ROREG,map=HOST_TEMPREG);
+            emit_movimm(constmap[i+1][rs]+offset,ra);
+            gen_tlb_addr_r(ra,map);
+            #else
             emit_movimm(constmap[i+1][rs]+offset+(intptr_t)g_rdram-0x80000000,ra);
+            #endif
           }else
           #endif
           emit_movimm(constmap[i+1][rs]+offset,ra);
@@ -4180,9 +4196,10 @@ static void address_generation(int i,struct regstat *i_regs,signed char entry[])
   }
 }
 
-static int get_final_value(int hr, int i, int *value)
+static int get_final_value(int hr, int i, int *value, int *offset)
 {
   int tr=regs[i].regmap[hr];
+  *offset=0;
   while(i<slen-1) {
     if(regs[i+1].regmap[hr]!=tr) break;
     if(!((regs[i+1].isconst>>hr)&1)) break;
@@ -4203,9 +4220,13 @@ static int get_final_value(int hr, int i, int *value)
           if(!using_tlb||((signed int)constmap[i][hr]+imm[i+2])<(signed int)0xC0000000) return 0;
           #endif
           #ifdef RAM_OFFSET
-          if((signed int)constmap[i][hr]+imm[i+2]<(signed int)0x80800000){
-            assert(0); //TOBEDONE
+          if((signed int)constmap[i][hr]+imm[i+2]<(signed int)0x80800000) {
+            #if NEW_DYNAREC==NEW_DYNAREC_ARM64
+            *value=constmap[i][hr]+imm[i+2];
+            *offset=1;
+            #else
             *value=constmap[i][hr]+imm[i+2]+(intptr_t)g_rdram-0x80000000;
+            #endif
           }else
           #endif
           // Precompute load address
@@ -4219,9 +4240,13 @@ static int get_final_value(int hr, int i, int *value)
         if(!using_tlb||((signed int)constmap[i][hr]+imm[i+1])<(signed int)0xC0000000) return 0;
         #endif
         #ifdef RAM_OFFSET
-        if((signed int)constmap[i][hr]+imm[i+1]<(signed int)0x80800000){
-          assert(0); //TOBEDONE
+        if((signed int)constmap[i][hr]+imm[i+1]<(signed int)0x80800000) {
+          #if NEW_DYNAREC==NEW_DYNAREC_ARM64
+          *value=constmap[i][hr]+imm[i+1];
+          *offset=1;
+          #else
           *value=constmap[i][hr]+imm[i+1]+(intptr_t)g_rdram-0x80000000;
+          #endif
         }else
         #endif
         // Precompute load address
@@ -4251,13 +4276,18 @@ static void load_consts(signed char pre[],signed char regmap[],int is32,int i)
       //if(entry[hr]!=regmap[hr]) {
       if(i==0||!((regs[i-1].isconst>>hr)&1)||pre[hr]!=regmap[hr]||bt[i]) {
         if(((regs[i].isconst>>hr)&1)&&regmap[hr]<64&&regmap[hr]>0) {
-          int value;
-          if(get_final_value(hr,i,&value)) {
+          int value,offset;
+          if(get_final_value(hr,i,&value,&offset)) {
             if(value==0) {
               emit_zeroreg(hr);
             }
             else {
               emit_movimm(value,hr);
+              if(offset) {
+                int map=get_reg(regmap,ROREG);
+                if(map<0) emit_loadreg(ROREG,map=HOST_TEMPREG);
+                gen_tlb_addr_r(hr,map);
+              }
             }
           }
         }
@@ -4277,13 +4307,18 @@ static void load_consts(signed char pre[],signed char regmap[],int is32,int i)
           }
           else
           {
-            int value;
-            if(get_final_value(hr,i,&value)) {
+            int value,offset;
+            if(get_final_value(hr,i,&value,&offset)) {
               if(value==0) {
                 emit_zeroreg(hr);
               }
               else {
                 emit_movimm(value,hr);
+                if(offset) {
+                  int map=get_reg(regmap,ROREG);
+                  if(map<0) emit_loadreg(ROREG,map=HOST_TEMPREG);
+                  gen_tlb_addr_r(hr,map);
+                }
               }
             }
           }
