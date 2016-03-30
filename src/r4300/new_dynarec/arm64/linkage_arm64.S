@@ -121,94 +121,172 @@ GLOBAL_FUNCTION(dyna_linker_ds):
     brk 0
     
 GLOBAL_FUNCTION(jump_vaddr_x0):
-    brk 0
+    /*eor    w2, w0, w0, lsl #16*/
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x1):
-    brk 0
+    /*eor    w2, w1, w1, lsl #16*/
+    mov    w0, w1
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x2):
-    brk 0
+    mov    w0, w2
+    /*eor    w2, w2, w2, lsl #16*/
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x3):
-    brk 0
+    /*eor    w2, w3, w3, lsl #16*/
+    mov    w0, w3
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x4):
-    brk 0
+    /*eor    w2, w4, w4, lsl #16*/
+    mov    w0, w4
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x5):
-    brk 0
+    /*eor    w2, w5, w5, lsl #16*/
+    mov    w0, w5
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x6):
-    brk 0
-    
-GLOBAL_FUNCTION(jump_vaddr_x7):
-    brk 0
+    /*eor    w2, w6, w6, lsl #16*/
+    mov    w0, w6
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x8):
-    brk 0
-    
+    /*eor    w2, w8, w8, lsl #16*/
+    mov    w0, w8
+    b      jump_vaddr
+
 GLOBAL_FUNCTION(jump_vaddr_x9):
-    brk 0
+    /*eor    w2, w9, w9, lsl #16*/
+    mov    w0, w9
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x10):
-    brk 0
+    /*eor    w2, w10, w10, lsl #16*/
+    mov    w0, w10
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x11):
-    brk 0
+    /*eor    w2, w11, w11, lsl #16*/
+    mov    w0, w11
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x12):
-    brk 0
+    /*eor    w2, w12, w12, lsl #16*/
+    mov    w0, w12
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x13):
-    brk 0
+    /*eor    w2, w13, w13, lsl #16*/
+    mov    w0, w13
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x14):
-    brk 0
+    /*eor    w2, w14, w14, lsl #16*/
+    mov    w0, w14
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x15):
-    brk 0
+    /*eor    w2, w15, w15, lsl #16*/
+    mov    w0, w15
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x16):
-    brk 0
+    /*eor    w2, w16, w16, lsl #16*/
+    mov    w0, w16
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x17):
-    brk 0
+    /*eor    w2, w17, w17, lsl #16*/
+    mov    w0, w17
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x18):
-    brk 0
+    /*eor    w2, w18, w18, lsl #16*/
+    mov    w0, w18
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x19):
-    brk 0
+    /*eor    w2, w19, w19, lsl #16*/
+    mov    w0, w19
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x20):
-    brk 0
+    /*eor    w2, w20, w20, lsl #16*/
+    mov    w0, w20
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x21):
-    brk 0
+    /*eor    w2, w21, w21, lsl #16*/
+    mov    w0, w21
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x22):
-    brk 0
+    /*eor    w2, w22, w22, lsl #16*/
+    mov    w0, w22
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x23):
-    brk 0
+    /*eor    w2, w23, w23, lsl #16*/
+    mov    w0, w23
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x24):
-    brk 0
+    /*eor    w2, w24, w24, lsl #16*/
+    mov    w0, w24
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x25):
-    brk 0
+    /*eor    w2, w25, w25, lsl #16*/
+    mov    w0, w25
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x26):
-    brk 0
+    /*eor    w2, w26, w26, lsl #16*/
+    mov    w0, w26
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x27):
-    brk 0
+    /*eor    w2, w27, w27, lsl #16*/
+    mov    w0, w27
+    b      jump_vaddr
     
 GLOBAL_FUNCTION(jump_vaddr_x28):
-    brk 0
+    /*eor    w2, w28, w28, lsl #16*/
+    mov    w0, w28
+    b      jump_vaddr
     
+GLOBAL_FUNCTION(jump_vaddr_x7):
+    /*eor    w2, w7, w7, lsl #16*/
+    mov    w0, w7
+ 
 GLOBAL_FUNCTION(jump_vaddr):
-    brk 0
+    str    w20, [x29, #cycle_count-dynarec_local]
+    bl     get_addr_ht
+    ldr    w20, [x29, #cycle_count-dynarec_local]
+    br     x0
+    /*adrp   x1, hash_table
+    add    x1, x1, :lo12:hash_table
+    movn   w3, #15
+    and    w2, w3, w2, lsr #12
+    add    x1, x1, x2
+    ldr    w2, [x1]
+    cmp    w2, w0
+    b.eq   .A1
+    add    x1, x1, #16
+    ldr    w2, [x1]
+    cmp    w2, w0
+    b.eq   .A1
+    str    w20, [x29, #cycle_count-dynarec_local]
+    bl     get_addr
+    ldr    w20, [x29, #cycle_count-dynarec_local]
+    br     x0
+.A1:
+    ldr    x1, [x1, #8]
+    br     x1*/
     
 GLOBAL_FUNCTION(verify_code_ds):
     brk 0
