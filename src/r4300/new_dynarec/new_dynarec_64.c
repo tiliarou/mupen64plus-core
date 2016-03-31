@@ -3292,6 +3292,7 @@ static void store_assemble(int i,struct regstat *i_regs)
 */
 }
 
+#ifndef storelr_assemble
 static void storelr_assemble(int i,struct regstat *i_regs)
 {
   int s,th,tl;
@@ -3336,7 +3337,6 @@ static void storelr_assemble(int i,struct regstat *i_regs)
       }
     }
     #ifdef RAM_OFFSET
-    assert(0); //TOBEDONE: ROREG register is 64bit
     int map=get_reg(i_regs->regmap,ROREG);
     if(map<0) emit_loadreg(ROREG,map=HOST_TEMPREG);
     gen_tlb_addr_w(temp,map);
@@ -3499,7 +3499,6 @@ static void storelr_assemble(int i,struct regstat *i_regs)
     add_stub(STORELR_STUB,jaddr,(intptr_t)out,0,(intptr_t)i_regs,rs2[i],ccadj[i],reglist);
   if(!using_tlb) {
     #ifdef RAM_OFFSET
-    assert(0); // TOBEDONE: ROREG register is 64bit
     int map=get_reg(i_regs->regmap,ROREG);
     if(map<0) map=HOST_TEMPREG;
     gen_orig_addr_w(temp,map);
@@ -3507,7 +3506,6 @@ static void storelr_assemble(int i,struct regstat *i_regs)
     emit_addimm_no_flags((uintptr_t)0x80000000-(uintptr_t)g_rdram,temp);
     #endif
     #if defined(HOST_IMM8)
-    assert(0); // TOBEDONE: INVCP register is 64bit
     int ir=get_reg(i_regs->regmap,INVCP);
     assert(ir>=0);
     emit_cmpmem_indexedsr12_reg(ir,temp,1);
@@ -3515,7 +3513,6 @@ static void storelr_assemble(int i,struct regstat *i_regs)
     emit_cmpmem_indexedsr12_imm((intptr_t)invalid_code,temp,1);
     #endif
     #if defined(HAVE_CONDITIONAL_CALL) && !defined(DESTRUCTIVE_SHIFT)
-    assert(0); // TOBEDONE: No conditional call but no destructive shift either
     emit_callne(invalidate_addr_reg[temp]);
     #else
     jaddr2=(intptr_t)out;
@@ -3537,6 +3534,7 @@ static void storelr_assemble(int i,struct regstat *i_regs)
     //restore_regs(0x100f);
   */
 }
+#endif
 
 static void c1ls_assemble(int i,struct regstat *i_regs)
 {
@@ -3695,7 +3693,6 @@ static void c1ls_assemble(int i,struct regstat *i_regs)
       temp=offset||c||s<0?ar:s;
       #endif
       #if defined(HOST_IMM8)
-      assert(0); // TOBEDONE: INVCP register is 64bit
       int ir=get_reg(i_regs->regmap,INVCP);
       assert(ir>=0);
       emit_cmpmem_indexedsr12_reg(ir,temp,1);
@@ -3703,7 +3700,6 @@ static void c1ls_assemble(int i,struct regstat *i_regs)
       emit_cmpmem_indexedsr12_imm((intptr_t)invalid_code,temp,1);
       #endif
       #if defined(HAVE_CONDITIONAL_CALL) && !defined(DESTRUCTIVE_SHIFT)
-      assert(0); // TOBEDONE: No conditional call but no destructive shift either
       emit_callne(invalidate_addr_reg[temp]);
       #else
       jaddr3=(intptr_t)out;

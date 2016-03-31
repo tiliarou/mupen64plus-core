@@ -539,7 +539,7 @@ ifneq ($(DYNAREC), )
       CFLAGS += -DNEW_DYNAREC=4
       SOURCE += \
         $(SRCDIR)/r4300/new_dynarec/arm64/linkage_arm64.S \
-        $(SRCDIR)/r4300/new_dynarec/new_dynarec_arm64.c
+        $(SRCDIR)/r4300/new_dynarec/new_dynarec_64.c
     endif
 
     SOURCE += \
