@@ -382,8 +382,8 @@ static void *dynamic_linker(void * src, u_int vaddr)
         assert((ptr2[0]&0xffe00000)==0x52a00000); //movz
         assert((ptr2[1]&0xffe00000)==0x72800000); //movk
         assert((ptr2[2]&0x9f000000)==0x10000000); //adr
-        assert((ptr2[3]&0xfc000000)==0x94000000); //bl
-        assert((ptr2[4]&0xfffffc1f)==0xd61f0000); //br
+        //assert((ptr2[3]&0xfc000000)==0x94000000); //bl
+        //assert((ptr2[4]&0xfffffc1f)==0xd61f0000); //br
         add_link(vaddr, ptr2);
         set_jump_target((intptr_t)ptr, (uintptr_t)head->addr);
         __clear_cache((void*)ptr, (void*)((uintptr_t)ptr+4));
@@ -484,8 +484,8 @@ static void *dynamic_linker_ds(void * src, u_int vaddr)
         assert((ptr2[0]&0xffe00000)==0x52a00000); //movz
         assert((ptr2[1]&0xffe00000)==0x72800000); //movk
         assert((ptr2[2]&0x9f000000)==0x10000000); //adr
-        assert((ptr2[3]&0xfc000000)==0x94000000); //bl
-        assert((ptr2[4]&0xfffffc1f)==0xd61f0000); //br
+        //assert((ptr2[3]&0xfc000000)==0x94000000); //bl
+        //assert((ptr2[4]&0xfffffc1f)==0xd61f0000); //br
         add_link(vaddr, ptr2);
         set_jump_target((intptr_t)ptr, (uintptr_t)head->addr);
         __clear_cache((void*)ptr, (void*)((uintptr_t)ptr+4));
@@ -3709,12 +3709,12 @@ static void emit_extjump2(intptr_t addr, int target, intptr_t linker)
   emit_adr(addr,0);
 
 #ifdef DEBUG_CYCLE_COUNT
-  emit_readword((intptr_t)&last_count,ECX);
-  emit_add(HOST_CCREG,ECX,HOST_CCREG);
-  emit_readword((intptr_t)&next_interupt,ECX);
+  emit_readword((intptr_t)&last_count,HOST_TEMPREG);
+  emit_add(HOST_CCREG,HOST_TEMPREG,HOST_CCREG);
+  emit_readword((intptr_t)&next_interupt,HOST_TEMPREG);
   emit_writeword(HOST_CCREG,(intptr_t)&g_cp0_regs[CP0_COUNT_REG]);
-  emit_sub(HOST_CCREG,ECX,HOST_CCREG);
-  emit_writeword(ECX,(intptr_t)&last_count);
+  emit_sub(HOST_CCREG,HOST_TEMPREG,HOST_CCREG);
+  emit_writeword(HOST_TEMPREG,(intptr_t)&last_count);
 #endif
   emit_call(linker);
   emit_jmpreg(0);
@@ -4515,13 +4515,14 @@ static void storelr_assemble_arm64(int i,struct regstat *i_regs)
 {
   int s,th,tl;
   int temp;
-  int temp2;
+  int temp2=0;
   int offset;
   intptr_t jaddr=0;
   intptr_t jaddr2=0;
   intptr_t case1,case2,case3;
   intptr_t done0,done1,done2;
-  int memtarget,c=0;
+  int memtarget=0;
+  int c=0;
   int agr=AGEN1+(i&1);
   u_int hr,reglist=0;
   th=get_reg(i_regs->regmap,rs2[i]|64);

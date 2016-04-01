@@ -269,6 +269,8 @@ static void nullf() {}
 #endif
 
 #ifdef NEW_DYNAREC_DEBUG
+//#undef USE_MINI_HT
+#define DEBUG_CYCLE_COUNT
 static int rdram_checksum(void)
 {
   int i;
@@ -303,11 +305,21 @@ static int fpr_checksum()
   return sum;
 }
 
+static int cop0_checksum(void)
+{
+  int i;
+  int sum=0;
+  for(i=0;i<32;i++)
+    sum^=g_cp0_regs[i];
+  return sum;
+}
+
 static void print_debug_info(u_int vaddr)
 {
   int i;
   int gpr_sum = gpr_checksum();
   int fpr_sum = fpr_checksum();
+  int cop0_sum = cop0_checksum();
   DebugMessage(M64MSG_INFO, "target addr:%.8x",vaddr);
   DebugMessage(M64MSG_INFO, "rdram checksum:%x",rdram_checksum());
   DebugMessage(M64MSG_INFO, "gpr checksum:%x",gpr_sum);
@@ -320,6 +332,9 @@ static void print_debug_info(u_int vaddr)
     for(i=0;i<32;i++)
       DebugMessage(M64MSG_INFO, "f%d:%.8x%.8x",i,((int*)reg_cop1_simple[i])[1],*((int*)reg_cop1_simple[i]));
   }
+  DebugMessage(M64MSG_INFO, "hi:%.8x%.8x, lo:%.8x%.8x",(int)(hi>>32),(int)hi,(int)(lo>>32),(int)lo);
+  DebugMessage(M64MSG_INFO, "FCR31:%.8x, FCR0:%.8x",FCR31,FCR0);
+  DebugMessage(M64MSG_INFO, "count:%.8x, next:%.8x\n",g_cp0_regs[CP0_COUNT_REG],next_interupt);
 }
 #endif
 

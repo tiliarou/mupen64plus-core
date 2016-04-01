@@ -99,7 +99,7 @@ static void *dynamic_linker(void * src, u_int vaddr)
       int *ptr2=(int*)((u_int)ptr + (u_int)*ptr + 4);
       assert((*ptr2&0xFF)==0x68);                   //push
       assert((*(int*)((u_int)ptr2+5)&0xFF)==0x68);  //push
-      assert((*(int*)((u_int)ptr2+10)&0xFF)==0xE8); //call
+      //assert((*(int*)((u_int)ptr2+10)&0xFF)==0xE8); //call
       add_link(vaddr, ptr2);
       u_int offset=(u_int)head->addr-(u_int)ptr-4;
       *ptr=offset;
@@ -193,7 +193,7 @@ static void *dynamic_linker_ds(void * src, u_int vaddr)
       int *ptr2=(int*)((u_int)ptr + (u_int)*ptr + 4);
       assert((*ptr2&0xFF)==0x68);                   //push
       assert((*(int*)((u_int)ptr2+5)&0xFF)==0x68);  //push
-      assert((*(int*)((u_int)ptr2+10)&0xFF)==0xE8); //call
+      //assert((*(int*)((u_int)ptr2+10)&0xFF)==0xE8); //call
       add_link(vaddr, ptr2);
       u_int offset=(u_int)head->addr-(u_int)ptr-4;
       *ptr=offset;

@@ -272,15 +272,15 @@ static void *dynamic_linker(void * src, u_int vaddr)
 #ifdef ARMv5_ONLY
       assert((*(int*)((u_int)ptr2)&0x0ff00000)==0x05900000); //ldr
       assert((*(int*)((u_int)ptr2+4)&0x0ff00000)==0x05900000); //ldr
-      assert((*(int*)((u_int)ptr2+8)&0x0f000000)==0x0b000000); //bl
-      assert((*(int*)((u_int)ptr2+12)&0x0ff00000)==0x01a00000); //mov
+      //assert((*(int*)((u_int)ptr2+8)&0x0f000000)==0x0b000000); //bl
+      //assert((*(int*)((u_int)ptr2+12)&0x0ff00000)==0x01a00000); //mov
 #else
       assert((*(int*)((u_int)ptr2)&0x0ff00000)==0x03000000); //movw
       assert((*(int*)((u_int)ptr2+4)&0x0ff00000)==0x03400000); //movt
       assert((*(int*)((u_int)ptr2+8)&0x0ff00000)==0x03000000); //movw
       assert((*(int*)((u_int)ptr2+12)&0x0ff00000)==0x03400000); //movt
-      assert((*(int*)((u_int)ptr2+16)&0x0f000000)==0x0b000000); //bl
-      assert((*(int*)((u_int)ptr2+20)&0x0ff00000)==0x01a00000); //mov
+      //assert((*(int*)((u_int)ptr2+16)&0x0f000000)==0x0b000000); //bl
+      //assert((*(int*)((u_int)ptr2+20)&0x0ff00000)==0x01a00000); //mov
 #endif
       add_link(vaddr, ptr2);
       *ptr=(*ptr&0xFF000000)|((((u_int)head->addr-(u_int)ptr-8)<<6)>>8);
@@ -378,15 +378,15 @@ static void *dynamic_linker_ds(void * src, u_int vaddr)
 #ifdef ARMv5_ONLY
       assert((*(int*)((u_int)ptr2)&0x0ff00000)==0x05900000); //ldr
       assert((*(int*)((u_int)ptr2+4)&0x0ff00000)==0x05900000); //ldr
-      assert((*(int*)((u_int)ptr2+8)&0x0f000000)==0x0b000000); //bl
-      assert((*(int*)((u_int)ptr2+12)&0x0ff00000)==0x01a00000); //mov
+      //assert((*(int*)((u_int)ptr2+8)&0x0f000000)==0x0b000000); //bl
+      //assert((*(int*)((u_int)ptr2+12)&0x0ff00000)==0x01a00000); //mov
 #else
       assert((*(int*)((u_int)ptr2)&0x0ff00000)==0x03000000); //movw
       assert((*(int*)((u_int)ptr2+4)&0x0ff00000)==0x03400000); //movt
       assert((*(int*)((u_int)ptr2+8)&0x0ff00000)==0x03000000); //movw
       assert((*(int*)((u_int)ptr2+12)&0x0ff00000)==0x03400000); //movt
-      assert((*(int*)((u_int)ptr2+16)&0x0f000000)==0x0b000000); //bl
-      assert((*(int*)((u_int)ptr2+20)&0x0ff00000)==0x01a00000); //mov
+      //assert((*(int*)((u_int)ptr2+16)&0x0f000000)==0x0b000000); //bl
+      //assert((*(int*)((u_int)ptr2+20)&0x0ff00000)==0x01a00000); //mov
 #endif
       add_link(vaddr, ptr2);
       *ptr=(*ptr&0xFF000000)|((((u_int)head->addr-(u_int)ptr-8)<<6)>>8);
