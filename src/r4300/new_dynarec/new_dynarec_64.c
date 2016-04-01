@@ -1810,7 +1810,6 @@ void multdiv_alloc(struct regstat *current,int i)
     }
     else // 64-bit
     {
-      assert(0);
       current->u&=~(1LL<<HIREG);
       current->u&=~(1LL<<LOREG);
       current->uu&=~(1LL<<HIREG);

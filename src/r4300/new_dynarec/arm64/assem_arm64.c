@@ -1195,8 +1195,8 @@ static void alloc_reg_temp(struct regstat *cur,int i,signed char tr)
   }
   DebugMessage(M64MSG_ERROR, "This shouldn't happen");exit(1);
 }
-// Allocate a specific ARM register.
-static void alloc_arm_reg(struct regstat *cur,int i,signed char tr,char hr)
+// Allocate a specific ARM64 register.
+static void alloc_arm64_reg(struct regstat *cur,int i,signed char tr,char hr)
 {
   int n;
   int dirty=0;
@@ -1219,7 +1219,7 @@ static void alloc_arm_reg(struct regstat *cur,int i,signed char tr,char hr)
 // Alloc cycle count into dedicated register
 static void alloc_cc(struct regstat *cur,int i)
 {
-  alloc_arm_reg(cur,i,CCREG,HOST_CCREG);
+  alloc_arm64_reg(cur,i,CCREG,HOST_CCREG);
 }
 
 /* Special alloc */
@@ -1875,7 +1875,7 @@ static void emit_xor(u_int rs1,u_int rs2,u_int rt)
 
 static void emit_addimm64(u_int rs,int imm,u_int rt)
 {
-  assert(rs==FP);
+  assert(rt!=29);
   assert(imm>0&&imm<4096);
   assem_debug("add %s, %s, #%d",regname64[rt],regname64[rs],imm);
   output_w32(0x91000000|imm<<10|rs<<5|rt);
@@ -2205,6 +2205,14 @@ static void emit_orrshl(u_int rs,u_int shift,u_int rt)
   assert(shift!=29);
   assem_debug("orr %s,%s,%s,lsl %s",regname[rt],regname[rt],regname[rs],regname[shift]);
   output_w32(0xe1800000|rd_rn_rm(rt,rt,rs)|0x10|(shift<<8));
+}
+static void emit_orrshl64(u_int rs,u_int shift,u_int rt)
+{
+  assert(rs!=29);
+  assert(rt!=29);
+  assert(shift<64);
+  assem_debug("orr %s,%s,%s,lsl %d",regname64[rt],regname64[rt],regname64[rs],shift);
+  output_w32(0xaa000000|rs<<16|shift<<10|rt<<5|rt);
 }
 static void emit_orrshr(u_int rs,u_int shift,u_int rt)
 {
@@ -2609,7 +2617,6 @@ static void emit_readword_indexed_tlb(int addr, int rs, int map, int rt)
 }
 static void emit_readdword_indexed_tlb(int addr, int rs, int map, int rh, int rl)
 {
-  assert(0);
   assert(rs!=29);
   assert(map!=29);
   assert(rh!=29);
@@ -2620,7 +2627,7 @@ static void emit_readdword_indexed_tlb(int addr, int rs, int map, int rh, int rl
   }else{
     assert(rh!=rs);
     if(rh>=0) emit_readword_indexed_tlb(addr, rs, map, rh);
-    emit_addimm(map,1,HOST_TEMPREG);
+    emit_addimm64(map,1,HOST_TEMPREG);
     emit_readword_indexed_tlb(addr, rs, HOST_TEMPREG, rl);
   }
 }
@@ -2916,13 +2923,29 @@ static void emit_mul(u_int rs1,u_int rs2,u_int rt)
   assem_debug("mul %s,%s,%s",regname[rt],regname[rs1],regname[rs2]);
   output_w32(0xe0000090|(rt<<16)|(rs2<<8)|rs1);
 }
+static void emit_mul64(u_int rs1,u_int rs2,u_int rt)
+{
+  assert(rs1!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  assem_debug("mul %s,%s,%s",regname64[rt],regname64[rs1],regname64[rs2]);
+  output_w32(0x9b000000|(rs2<<16)|(WZR<<10)|(rs1<<5)|rt);
+}
 static void emit_umull(u_int rs1, u_int rs2, u_int rt)
 {
-  assem_debug("umull %s, %s, %s",regname[rt],regname[rs1],regname[rs2]);
+  assem_debug("umull %s, %s, %s",regname64[rt],regname[rs1],regname[rs2]);
   assert(rs1!=29);
   assert(rs2!=29);
   assert(rt!=29);
   output_w32(0x9ba00000|(rs2<<16)|(WZR<<10)|(rs1<<5)|rt);
+}
+static void emit_umulh(u_int rs1, u_int rs2, u_int rt)
+{
+  assem_debug("umulh %s, %s, %s",regname64[rt],regname64[rs1],regname64[rs2]);
+  assert(rs1!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  output_w32(0x9bc00000|(rs2<<16)|(WZR<<10)|(rs1<<5)|rt);
 }
 static void emit_umlal(u_int rs1, u_int rs2, u_int high, u_int low)
 {
@@ -4102,7 +4125,6 @@ static void do_dirty_stub_ds(void)
 
 static void do_cop1stub(int n)
 {
-  assert(0);
   literal_pool(256);
   assem_debug("do_cop1stub %x",start+stubs[n][3]*4);
   set_jump_target(stubs[n][1],(intptr_t)out);
@@ -4119,7 +4141,7 @@ static void do_cop1stub(int n)
   if(regs[i].regmap_entry[HOST_CCREG]!=CCREG) emit_loadreg(CCREG,HOST_CCREG);
   emit_movimm(start+(i-ds)*4,EAX); // Get PC
   emit_addimm(HOST_CCREG,CLOCK_DIVIDER*ccadj[i],HOST_CCREG); // CHECK: is this right?  There should probably be an extra cycle...
-  emit_jmp(ds?(int)fp_exception_ds:(int)fp_exception);
+  emit_jmp(ds?(intptr_t)fp_exception_ds:(intptr_t)fp_exception);
 }
 
 /* TLB */
@@ -4230,7 +4252,7 @@ static void generate_map_const(u_int addr,int tr) {
 
 /* Special assem */
 
-static void shift_assemble_arm(int i,struct regstat *i_regs)
+static void shift_assemble_arm64(int i,struct regstat *i_regs)
 {
   if(rt1[i]) {
     if(opcode2[i]<=0x07) // SLLV/SRLV/SRAV
@@ -4339,9 +4361,9 @@ static void shift_assemble_arm(int i,struct regstat *i_regs)
     }
   }
 }
-#define shift_assemble shift_assemble_arm
+#define shift_assemble shift_assemble_arm64
 
-static void loadlr_assemble_arm(int i,struct regstat *i_regs)
+static void loadlr_assemble_arm64(int i,struct regstat *i_regs)
 {
   int s,th,tl,temp,temp2,addr,map=-1,cache=-1;
   int offset;
@@ -4487,7 +4509,7 @@ static void loadlr_assemble_arm(int i,struct regstat *i_regs)
     }
   }
 }
-#define loadlr_assemble loadlr_assemble_arm
+#define loadlr_assemble loadlr_assemble_arm64
 
 static void storelr_assemble_arm64(int i,struct regstat *i_regs)
 {
@@ -4842,13 +4864,12 @@ static void cop0_assemble(int i,struct regstat *i_regs)
 
 static void cop1_assemble(int i,struct regstat *i_regs)
 {
-  assert(0);
   // Check cop1 unusable
   if(!cop1_usable) {
     signed char rs=get_reg(i_regs->regmap,CSREG);
     assert(rs>=0);
     emit_testimm(rs,0x20000000);
-    int jaddr=(int)out;
+    intptr_t jaddr=(intptr_t)out;
     emit_jeq(0);
     add_stub(FP_STUB,jaddr,(intptr_t)out,i,rs,(intptr_t)i_regs,is_delayslot,0);
     cop1_usable=1;
@@ -4856,7 +4877,7 @@ static void cop1_assemble(int i,struct regstat *i_regs)
   if (opcode2[i]==0) { // MFC1
     signed char tl=get_reg(i_regs->regmap,rt1[i]);
     if(tl>=0) {
-      emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],tl);
+      emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],tl);
       emit_readword_indexed(0,tl,tl);
     }
   }
@@ -4864,7 +4885,7 @@ static void cop1_assemble(int i,struct regstat *i_regs)
     signed char tl=get_reg(i_regs->regmap,rt1[i]);
     signed char th=get_reg(i_regs->regmap,rt1[i]|64);
     if(tl>=0) {
-      emit_readword((int)&reg_cop1_double[(source[i]>>11)&0x1f],tl);
+      emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],tl);
       if(th>=0) emit_readword_indexed(4,tl,th);
       emit_readword_indexed(0,tl,tl);
     }
@@ -4872,14 +4893,14 @@ static void cop1_assemble(int i,struct regstat *i_regs)
   else if (opcode2[i]==4) { // MTC1
     signed char sl=get_reg(i_regs->regmap,rs1[i]);
     signed char temp=get_reg(i_regs->regmap,-1);
-    emit_readword((int)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
     emit_writeword_indexed(sl,0,temp);
   }
   else if (opcode2[i]==5) { // DMTC1
     signed char sl=get_reg(i_regs->regmap,rs1[i]);
     signed char sh=rs1[i]>0?get_reg(i_regs->regmap,rs1[i]|64):sl;
     signed char temp=get_reg(i_regs->regmap,-1);
-    emit_readword((int)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
     emit_writeword_indexed(sh,4,temp);
     emit_writeword_indexed(sl,0,temp);
   }
@@ -4888,8 +4909,8 @@ static void cop1_assemble(int i,struct regstat *i_regs)
     signed char tl=get_reg(i_regs->regmap,rt1[i]);
     if(tl>=0) {
       u_int copr=(source[i]>>11)&0x1f;
-      if(copr==0) emit_readword((int)&FCR0,tl);
-      if(copr==31) emit_readword((int)&FCR31,tl);
+      if(copr==0) emit_readword((intptr_t)&FCR0,tl);
+      if(copr==31) emit_readword((intptr_t)&FCR31,tl);
     }
   }
   else if (opcode2[i]==6) // CTC1
@@ -4899,7 +4920,7 @@ static void cop1_assemble(int i,struct regstat *i_regs)
     assert(sl>=0);
     if(copr==31)
     {
-      emit_writeword(sl,(int)&FCR31);
+      emit_writeword(sl,(intptr_t)&FCR31);
       // Set the rounding mode
       //FIXME
       //char temp=get_reg(i_regs->regmap,-1);
@@ -4909,7 +4930,7 @@ static void cop1_assemble(int i,struct regstat *i_regs)
   }
 }
 
-static void fconv_assemble_arm(int i,struct regstat *i_regs)
+static void fconv_assemble_arm64(int i,struct regstat *i_regs)
 {
   assert(0);
   signed char temp=get_reg(i_regs->regmap,-1);
@@ -5125,7 +5146,7 @@ static void fconv_assemble_arm(int i,struct regstat *i_regs)
   
   restore_regs(reglist);
 }
-#define fconv_assemble fconv_assemble_arm
+#define fconv_assemble fconv_assemble_arm64
 
 static void fcomp_assemble(int i,struct regstat *i_regs)
 {
@@ -5450,7 +5471,65 @@ static void float_assemble(int i,struct regstat *i_regs)
   }
 }
 
-static void multdiv_assemble_arm(int i,struct regstat *i_regs)
+void multdiv_alloc_arm64(struct regstat *current,int i)
+{
+  //  case 0x18: MULT
+  //  case 0x19: MULTU
+  //  case 0x1A: DIV
+  //  case 0x1B: DIVU
+  //  case 0x1C: DMULT
+  //  case 0x1D: DMULTU
+  //  case 0x1E: DDIV
+  //  case 0x1F: DDIVU
+  clear_const(current,rs1[i]);
+  clear_const(current,rs2[i]);
+  if(rs1[i]&&rs2[i])
+  {
+    if((opcode2[i]&4)==0) // 32-bit
+    {
+      current->u&=~(1LL<<HIREG);
+      current->u&=~(1LL<<LOREG);
+      alloc_reg(current,i,HIREG);
+      alloc_reg(current,i,LOREG);
+      alloc_reg(current,i,rs1[i]);
+      alloc_reg(current,i,rs2[i]);
+      current->is32|=1LL<<HIREG;
+      current->is32|=1LL<<LOREG;
+      dirty_reg(current,HIREG);
+      dirty_reg(current,LOREG);
+    }
+    else // 64-bit
+    {
+      current->u&=~(1LL<<HIREG);
+      current->u&=~(1LL<<LOREG);
+      current->uu&=~(1LL<<HIREG);
+      current->uu&=~(1LL<<LOREG);
+      alloc_reg64(current,i,HIREG);
+      alloc_reg64(current,i,LOREG);
+      alloc_reg64(current,i,rs1[i]);
+      alloc_reg64(current,i,rs2[i]);
+      current->is32&=~(1LL<<HIREG);
+      current->is32&=~(1LL<<LOREG);
+      dirty_reg(current,HIREG);
+      dirty_reg(current,LOREG);
+    }
+  }
+  else
+  {
+    // Multiply by zero is zero.
+    // MIPS does not have a divide by zero exception.
+    // The result is undefined, we return zero.
+    alloc_reg(current,i,HIREG);
+    alloc_reg(current,i,LOREG);
+    current->is32|=1LL<<HIREG;
+    current->is32|=1LL<<LOREG;
+    dirty_reg(current,HIREG);
+    dirty_reg(current,LOREG);
+  }
+}
+#define multdiv_alloc multdiv_alloc_arm64
+
+static void multdiv_assemble_arm64(int i,struct regstat *i_regs)
 {
   //  case 0x18: MULT
   //  case 0x19: MULTU
@@ -5466,6 +5545,7 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
     {
       if(opcode2[i]==0x18) // MULT
       {
+        assert(0);
         signed char m1=get_reg(i_regs->regmap,rs1[i]);
         signed char m2=get_reg(i_regs->regmap,rs2[i]);
         signed char high=get_reg(i_regs->regmap,HIREG);
@@ -5492,6 +5572,7 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
       }
       if(opcode2[i]==0x1A) // DIV
       {
+        assert(0);
         signed char d1=get_reg(i_regs->regmap,rs1[i]); // dividend
         signed char d2=get_reg(i_regs->regmap,rs2[i]); // divisor
         assert(d1>=0);
@@ -5534,6 +5615,7 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
       }
       if(opcode2[i]==0x1B) // DIVU
       {
+        assert(0);
         signed char d1=get_reg(i_regs->regmap,rs1[i]); // dividend
         signed char d2=get_reg(i_regs->regmap,rs2[i]); // divisor
         assert(d1>=0);
@@ -5570,9 +5652,9 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
     }
     else // 64-bit
     {
-      assert(0);
       if(opcode2[i]==0x1C) // DMULT
       {
+        assert(0);
         signed char m1h=get_reg(i_regs->regmap,rs1[i]|64);
         signed char m1l=get_reg(i_regs->regmap,rs1[i]);
         signed char m2h=get_reg(i_regs->regmap,rs2[i]|64);
@@ -5615,28 +5697,28 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
         assert(m2h>=0);
         assert(m1l>=0);
         assert(m2l>=0);
-        signed char rh=get_reg(i_regs->regmap,HIREG|64);
-        signed char rl=get_reg(i_regs->regmap,HIREG);
-        assert(rh>=0);
-        assert(rl>=0);
-        
-        /*emit_umull(m1l,m2l,rh,rl);
-        emit_storereg(LOREG,rl);
-        emit_mov(rh,rl);
-        emit_zeroreg(rh);
-        emit_umlal(m1l,m2h,rh,rl);
-        emit_mov(rh,HOST_TEMPREG);
-        emit_zeroreg(rh);
-        emit_umlal(m1h,m2l,rh,rl);
-        emit_storereg(LOREG|64,rl);
-        emit_zeroreg(rl);
-        emit_adds(HOST_TEMPREG,rh,HOST_TEMPREG);
-        emit_adcimm(rl,0,rh);
-        emit_mov(HOST_TEMPREG,rl);
-        emit_umlal(m1h,m2h,rh,rl);*/
+        signed char hih=get_reg(i_regs->regmap,HIREG|64);
+        signed char hil=get_reg(i_regs->regmap,HIREG);
+        signed char loh=get_reg(i_regs->regmap,LOREG|64);
+        signed char lol=get_reg(i_regs->regmap,LOREG);
+        assert(hih>=0);
+        assert(hil>=0);
+        assert(loh>=0);
+        assert(lol>=0);
+        emit_mov(m1l,lol);
+        emit_orrshl64(m1h,32,lol);
+        emit_mov(m2l,loh);
+        emit_orrshl64(m2h,32,loh);
+        emit_mul64(lol,loh,hil);
+        emit_umulh(lol,loh,hih);
+        emit_mov(hil,lol);
+        emit_shrimm64(hil,32,loh);
+        emit_mov(hih,hil);
+        emit_shrimm64(hih,32,hih);
       }
       if(opcode2[i]==0x1E) // DDIV
       {
+        assert(0);
         signed char d1h=get_reg(i_regs->regmap,rs1[i]|64);
         signed char d1l=get_reg(i_regs->regmap,rs1[i]);
         signed char d2h=get_reg(i_regs->regmap,rs2[i]|64);
@@ -5666,6 +5748,7 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
       }
       if(opcode2[i]==0x1F) // DDIVU
       {
+        assert(0);
       //u_int hr,reglist=0;
       //for(hr=0;hr<HOST_REGS;hr++) {
       //  if(i_regs->regmap[hr]>=0 && (i_regs->regmap[hr]&62)!=HIREG) reglist|=1<<hr;
@@ -5710,7 +5793,7 @@ static void multdiv_assemble_arm(int i,struct regstat *i_regs)
     if(lr>=0) emit_zeroreg(lr);
   }
 }
-#define multdiv_assemble multdiv_assemble_arm
+#define multdiv_assemble multdiv_assemble_arm64
 
 static void do_preload_rhash(int r) {
   // Don't need this for ARM64.  On x86, this puts the value 0xf8 into the
@@ -5810,7 +5893,7 @@ static void wb_valid(signed char pre[],signed char entry[],u_int dirty_pre,u_int
 
 
 /* using strd could possibly help but you'd have to allocate registers in pairs
-static void wb_invalidate_arm(signed char pre[],signed char entry[],uint64_t dirty,uint64_t is32,uint64_t u,uint64_t uu)
+static void wb_invalidate_arm64(signed char pre[],signed char entry[],uint64_t dirty,uint64_t is32,uint64_t u,uint64_t uu)
 {
   int hr;
   int wrote=-1;
@@ -5862,7 +5945,7 @@ static void wb_invalidate_arm(signed char pre[],signed char entry[],uint64_t dir
     }
   }
 }
-#define wb_invalidate wb_invalidate_arm
+#define wb_invalidate wb_invalidate_arm64
 */
 
 // Clearing the cache is rather slow on ARM Linux, so mark the areas
