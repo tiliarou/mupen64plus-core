@@ -3207,9 +3207,12 @@ static void store_assemble(int i,struct regstat *i_regs)
       if(map>=0) {
         gen_tlb_addr_w(temp,map);
         emit_writehword_indexed(tl,x,temp);
-      }else
-        assert(0); //TOBEDONE
+      }else {
+        #if NEW_DYNAREC==NEW_DYNAREC_ARM64
+        assert(0);
+        #endif
         emit_writehword_indexed(tl,(intptr_t)g_rdram-0x80000000+x,temp);
+      }
     }
     type=STOREH_STUB;
   }

@@ -2923,6 +2923,14 @@ static void emit_mul(u_int rs1,u_int rs2,u_int rt)
   assem_debug("mul %s,%s,%s",regname[rt],regname[rs1],regname[rs2]);
   output_w32(0xe0000090|(rt<<16)|(rs2<<8)|rs1);
 }
+static void emit_msub(u_int rs1,u_int rs2,u_int rs3,u_int rt)
+{
+  assert(rs1!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  assem_debug("msub %s,%s,%s,%s",regname[rt],regname[rs1],regname[rs2],regname[rs3]);
+  output_w32(0x1b008000|(rs2<<16)|(rs3<<10)|(rs1<<5)|rt);
+}
 static void emit_mul64(u_int rs1,u_int rs2,u_int rt)
 {
   assert(rs1!=29);
@@ -2930,6 +2938,14 @@ static void emit_mul64(u_int rs1,u_int rs2,u_int rt)
   assert(rt!=29);
   assem_debug("mul %s,%s,%s",regname64[rt],regname64[rs1],regname64[rs2]);
   output_w32(0x9b000000|(rs2<<16)|(WZR<<10)|(rs1<<5)|rt);
+}
+static void emit_msub64(u_int rs1,u_int rs2,u_int rs3,u_int rt)
+{
+  assert(rs1!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  assem_debug("msub %s,%s,%s,%s",regname64[rt],regname64[rs1],regname64[rs2],regname64[rs3]);
+  output_w32(0x9b008000|(rs2<<16)|(rs3<<10)|(rs1<<5)|rt);
 }
 static void emit_umull(u_int rs1, u_int rs2, u_int rt)
 {
@@ -2957,15 +2973,13 @@ static void emit_umlal(u_int rs1, u_int rs2, u_int high, u_int low)
   assert(low!=29);
   output_w32(0xe0a00090|(high<<16)|(low<<12)|(rs2<<8)|rs1);
 }
-static void emit_smull(u_int rs1, u_int rs2, u_int high, u_int low)
+static void emit_smull(u_int rs1, u_int rs2, u_int rt)
 {
   assert(0);
-  assem_debug("smull %s, %s, %s, %s",regname[low],regname[high],regname[rs1],regname[rs2]);
-  assert(rs1!=29);
-  assert(rs2!=29);
-  assert(high!=29);
-  assert(low!=29);
-  output_w32(0xe0c00090|(high<<16)|(low<<12)|(rs2<<8)|rs1);
+}
+static void emit_smulh(u_int rs1, u_int rs2, u_int rt)
+{
+  assert(0);
 }
 static void emit_smlal(u_int rs1, u_int rs2, u_int high, u_int low)
 {
@@ -2980,23 +2994,35 @@ static void emit_smlal(u_int rs1, u_int rs2, u_int high, u_int low)
 
 static void emit_sdiv(u_int rs1,u_int rs2,u_int rt)
 {
-  assert(0);
   assert(rs1!=29);
   assert(rs2!=29);
   assert(rt!=29);
-  //assert(arm_cpu_features.IDIVa);
   assem_debug("sdiv %s,%s,%s",regname[rt],regname[rs1],regname[rs2]);
-  output_w32(0xe710f010|(rt<<16)|(rs2<<8)|rs1);
+  output_w32(0x1ac00c00|(rs2<<16)|(rs1<<5)|rt);
 }
 static void emit_udiv(u_int rs1,u_int rs2,u_int rt)
 {
-  assert(0);
   assert(rs1!=29);
   assert(rs2!=29);
   assert(rt!=29);
-  //assert(arm_cpu_features.IDIVa);
   assem_debug("udiv %s,%s,%s",regname[rt],regname[rs1],regname[rs2]);
-  output_w32(0xe730f010|(rt<<16)|(rs2<<8)|rs1);
+  output_w32(0x1ac00800|(rs2<<16)|(rs1<<5)|rt);
+}
+static void emit_sdiv64(u_int rs1,u_int rs2,u_int rt)
+{
+  assert(rs1!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  assem_debug("sdiv %s,%s,%s",regname64[rt],regname64[rs1],regname64[rs2]);
+  output_w32(0x9ac00c00|(rs2<<16)|(rs1<<5)|rt);
+}
+static void emit_udiv64(u_int rs1,u_int rs2,u_int rt)
+{
+  assert(rs1!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  assem_debug("udiv %s,%s,%s",regname64[rt],regname64[rs1],regname64[rs2]);
+  output_w32(0x9ac00800|(rs2<<16)|(rs1<<5)|rt);
 }
 
 static void emit_clz(int rs,int rt)
@@ -5555,7 +5581,9 @@ static void multdiv_assemble_arm64(int i,struct regstat *i_regs)
         assert(m2>=0);
         assert(high>=0);
         assert(low>=0);
-        emit_smull(m1,m2,high,low);
+        emit_smull(m1,m2,high);
+        emit_mov(high,low);
+        emit_shrimm64(high,32,high);
       }
       if(opcode2[i]==0x19) // MULTU
       {
@@ -5567,88 +5595,40 @@ static void multdiv_assemble_arm64(int i,struct regstat *i_regs)
         assert(m2>=0);
         assert(high>=0);
         assert(low>=0);
-        emit_umull(m1,m2,HOST_TEMPREG);
-        emit_mov(HOST_TEMPREG,low);
-        emit_shrimm64(HOST_TEMPREG,32,high);
+        emit_umull(m1,m2,high);
+        emit_mov(high,low);
+        emit_shrimm64(high,32,high);
       }
       if(opcode2[i]==0x1A) // DIV
       {
-        assert(0);
-        signed char d1=get_reg(i_regs->regmap,rs1[i]); // dividend
-        signed char d2=get_reg(i_regs->regmap,rs2[i]); // divisor
-        assert(d1>=0);
-        assert(d2>=0);
+        signed char numerator=get_reg(i_regs->regmap,rs1[i]);
+        signed char denominator=get_reg(i_regs->regmap,rs2[i]);
+        assert(numerator>=0);
+        assert(denominator>=0);
         signed char quotient=get_reg(i_regs->regmap,LOREG);
         signed char remainder=get_reg(i_regs->regmap,HIREG);
         assert(quotient>=0);
         assert(remainder>=0);
-
-        //if(arm_cpu_features.IDIVa)
-        if(1)
-        {
-          emit_test(d2,d2);
-          emit_jeq((int)out+16); // Division by zero
-          emit_sdiv(d1,d2,quotient);
-          emit_mul(quotient,d2,remainder);
-          emit_sub(d1,remainder,remainder);
-        }
-        else
-        {
-          emit_movs(d1,remainder);
-          emit_negmi(remainder,remainder);
-          emit_movs(d2,HOST_TEMPREG);
-          emit_jeq((int)out+52); // Division by zero
-          emit_negmi(HOST_TEMPREG,HOST_TEMPREG);
-          emit_clz(HOST_TEMPREG,quotient);
-          emit_shl(HOST_TEMPREG,quotient,HOST_TEMPREG);
-          emit_orimm(quotient,1<<31,quotient);
-          emit_shr(quotient,quotient,quotient);
-          emit_cmp(remainder,HOST_TEMPREG);
-          emit_subcs(remainder,HOST_TEMPREG,remainder);
-          emit_adcs(quotient,quotient,quotient);
-          emit_shrimm(HOST_TEMPREG,1,HOST_TEMPREG);
-          emit_jcc((int)out-16); // -4
-          emit_teq(d1,d2);
-          emit_negmi(quotient,quotient);
-          emit_test(d1,d1);
-          emit_negmi(remainder,remainder);
-        }
+        emit_test(denominator,denominator);
+        emit_jeq((int)out+12); // Division by zero
+        emit_sdiv(numerator,denominator,quotient);
+        emit_msub(quotient,denominator,numerator,remainder);
       }
       if(opcode2[i]==0x1B) // DIVU
       {
         assert(0);
-        signed char d1=get_reg(i_regs->regmap,rs1[i]); // dividend
-        signed char d2=get_reg(i_regs->regmap,rs2[i]); // divisor
-        assert(d1>=0);
-        assert(d2>=0);
+        signed char numerator=get_reg(i_regs->regmap,rs1[i]);
+        signed char denominator=get_reg(i_regs->regmap,rs2[i]);
+        assert(numerator>=0);
+        assert(denominator>=0);
         signed char quotient=get_reg(i_regs->regmap,LOREG);
         signed char remainder=get_reg(i_regs->regmap,HIREG);
         assert(quotient>=0);
         assert(remainder>=0);
-        emit_test(d2,d2);
-
-        //if(arm_cpu_features.IDIVa)
-        if(1)
-        {
-          emit_jeq((int)out+16); // Division by zero
-          emit_udiv(d1,d2,quotient);
-          emit_mul(quotient,d2,remainder);
-          emit_sub(d1,remainder,remainder);
-        }
-        else
-        {
-          emit_jeq((int)out+44); // Division by zero
-          emit_clz(d2,HOST_TEMPREG);
-          emit_movimm(1<<31,quotient);
-          emit_shl(d2,HOST_TEMPREG,d2);
-          emit_mov(d1,remainder);
-          emit_shr(quotient,HOST_TEMPREG,quotient);
-          emit_cmp(remainder,d2);
-          emit_subcs(remainder,d2,remainder);
-          emit_adcs(quotient,quotient,quotient);
-          emit_shrcc_imm(d2,1,d2);
-          emit_jcc((int)out-16); // -4
-        }
+        emit_test(denominator,denominator);
+        emit_jeq((int)out+12); // Division by zero
+        emit_udiv(numerator,denominator,quotient);
+        emit_msub(quotient,denominator,numerator,remainder);
       }
     }
     else // 64-bit
@@ -5664,29 +5644,24 @@ static void multdiv_assemble_arm64(int i,struct regstat *i_regs)
         assert(m2h>=0);
         assert(m1l>=0);
         assert(m2l>=0);
-        signed char rh=get_reg(i_regs->regmap,HIREG|64);
-        signed char rl=get_reg(i_regs->regmap,HIREG);
-        assert(rh>=0);
-        assert(rl>=0);
-
-        /*emit_umull(m1l,m2l,rh,rl);
-        emit_storereg(LOREG,rl);
-        emit_mov(rh,rl);
-        emit_zeroreg(rh);
-        emit_smlal(m1l,m2h,rh,rl);
-        emit_mov(rh,HOST_TEMPREG);
-        emit_testimm(m1l,0x80000000);
-        emit_addne(HOST_TEMPREG,m2h,HOST_TEMPREG);
-        emit_zeroreg(rh);
-        emit_smlal(m1h,m2l,rh,rl);
-        emit_testimm(m2l,0x80000000);
-        emit_addne(rh,m1h,rh);
-        emit_storereg(LOREG|64,rl);
-        emit_sarimm(HOST_TEMPREG,31,rl);
-        emit_adds(HOST_TEMPREG,rh,HOST_TEMPREG);
-        emit_addsarimm(rl,rh,rh,31);
-        emit_mov(HOST_TEMPREG,rl);
-        emit_smlal(m1h,m2h,rh,rl);*/
+        signed char hih=get_reg(i_regs->regmap,HIREG|64);
+        signed char hil=get_reg(i_regs->regmap,HIREG);
+        signed char loh=get_reg(i_regs->regmap,LOREG|64);
+        signed char lol=get_reg(i_regs->regmap,LOREG);
+        assert(hih>=0);
+        assert(hil>=0);
+        assert(loh>=0);
+        assert(lol>=0);
+        emit_mov(m1l,lol);
+        emit_orrshl64(m1h,32,lol);
+        emit_mov(m2l,loh);
+        emit_orrshl64(m2h,32,loh);
+        emit_mul64(lol,loh,hil);
+        emit_smulh(lol,loh,hih);
+        emit_mov(hil,lol);
+        emit_shrimm64(hil,32,loh);
+        emit_mov(hih,hil);
+        emit_shrimm64(hih,32,hih);
       }
       if(opcode2[i]==0x1D) // DMULTU
       {
@@ -5720,66 +5695,61 @@ static void multdiv_assemble_arm64(int i,struct regstat *i_regs)
       if(opcode2[i]==0x1E) // DDIV
       {
         assert(0);
-        signed char d1h=get_reg(i_regs->regmap,rs1[i]|64);
-        signed char d1l=get_reg(i_regs->regmap,rs1[i]);
-        signed char d2h=get_reg(i_regs->regmap,rs2[i]|64);
-        signed char d2l=get_reg(i_regs->regmap,rs2[i]);
-        assert(d1h>=0);
-        assert(d2h>=0);
-        assert(d1l>=0);
-        assert(d2l>=0);
-        save_regs(0x7ffff);
-        if(d1l!=0) emit_mov(d1l,0);
-        if(d1h==0) emit_readword((int)&dynarec_local,1);
-        else if(d1h>1) emit_mov(d1h,1);
-        if(d2l<2) emit_readword((int)&dynarec_local+d2l*4,2);
-        else if(d2l>2) emit_mov(d2l,2);
-        if(d2h<3) emit_readword((int)&dynarec_local+d2h*4,3);
-        else if(d2h>3) emit_mov(d2h,3);
-        emit_call((int)&div64);
-        restore_regs(0x7ffff);
-        signed char hih=get_reg(i_regs->regmap,HIREG|64);
-        signed char hil=get_reg(i_regs->regmap,HIREG);
-        signed char loh=get_reg(i_regs->regmap,LOREG|64);
-        signed char lol=get_reg(i_regs->regmap,LOREG);
-        if(hih>=0) emit_loadreg(HIREG|64,hih);
-        if(hil>=0) emit_loadreg(HIREG,hil);
-        if(loh>=0) emit_loadreg(LOREG|64,loh);
-        if(lol>=0) emit_loadreg(LOREG,lol);
+        signed char numh=get_reg(i_regs->regmap,rs1[i]|64);
+        signed char numl=get_reg(i_regs->regmap,rs1[i]);
+        signed char denomh=get_reg(i_regs->regmap,rs2[i]|64);
+        signed char denoml=get_reg(i_regs->regmap,rs2[i]);
+        assert(numh>=0);
+        assert(numl>=0);
+        assert(denomh>=0);
+        assert(denoml>=0);
+        signed char remh=get_reg(i_regs->regmap,HIREG|64);
+        signed char reml=get_reg(i_regs->regmap,HIREG);
+        signed char quoh=get_reg(i_regs->regmap,LOREG|64);
+        signed char quol=get_reg(i_regs->regmap,LOREG);
+        assert(remh>=0);
+        assert(reml>=0);
+        assert(quoh>=0);
+        assert(quol>=0);
+        emit_mov(numl,quol);
+        emit_orrshl64(numh,32,quol);
+        emit_mov(denoml,quoh);
+        emit_orrshl64(denomh,32,quoh);
+        emit_sdiv64(quol,quoh,reml);
+        emit_msub64(reml,quoh,quol,remh);
+        emit_mov(reml,quol);
+        emit_shrimm64(reml,32,quoh);
+        emit_mov(remh,reml);
+        emit_shrimm64(remh,32,remh);
       }
       if(opcode2[i]==0x1F) // DDIVU
       {
-        assert(0);
-      //u_int hr,reglist=0;
-      //for(hr=0;hr<HOST_REGS;hr++) {
-      //  if(i_regs->regmap[hr]>=0 && (i_regs->regmap[hr]&62)!=HIREG) reglist|=1<<hr;
-      //}
-        signed char d1h=get_reg(i_regs->regmap,rs1[i]|64);
-        signed char d1l=get_reg(i_regs->regmap,rs1[i]);
-        signed char d2h=get_reg(i_regs->regmap,rs2[i]|64);
-        signed char d2l=get_reg(i_regs->regmap,rs2[i]);
-        assert(d1h>=0);
-        assert(d2h>=0);
-        assert(d1l>=0);
-        assert(d2l>=0);
-        save_regs(0x7ffff);
-        if(d1l!=0) emit_mov(d1l,0);
-        if(d1h==0) emit_readword((int)&dynarec_local,1);
-        else if(d1h>1) emit_mov(d1h,1);
-        if(d2l<2) emit_readword((int)&dynarec_local+d2l*4,2);
-        else if(d2l>2) emit_mov(d2l,2);
-        if(d2h<3) emit_readword((int)&dynarec_local+d2h*4,3);
-        else if(d2h>3) emit_mov(d2h,3);
-        emit_call((int)&divu64);
-        restore_regs(0x7ffff);
-        signed char hih=get_reg(i_regs->regmap,HIREG|64);
-        signed char hil=get_reg(i_regs->regmap,HIREG);
-        signed char loh=get_reg(i_regs->regmap,LOREG|64);
-        signed char lol=get_reg(i_regs->regmap,LOREG);
-        if(hih>=0) emit_loadreg(HIREG|64,hih);
-        if(hil>=0) emit_loadreg(HIREG,hil);
-        if(loh>=0) emit_loadreg(LOREG|64,loh);
-        if(lol>=0) emit_loadreg(LOREG,lol);
+        signed char numh=get_reg(i_regs->regmap,rs1[i]|64);
+        signed char numl=get_reg(i_regs->regmap,rs1[i]);
+        signed char denomh=get_reg(i_regs->regmap,rs2[i]|64);
+        signed char denoml=get_reg(i_regs->regmap,rs2[i]);
+        assert(numh>=0);
+        assert(numl>=0);
+        assert(denomh>=0);
+        assert(denoml>=0);
+        signed char remh=get_reg(i_regs->regmap,HIREG|64);
+        signed char reml=get_reg(i_regs->regmap,HIREG);
+        signed char quoh=get_reg(i_regs->regmap,LOREG|64);
+        signed char quol=get_reg(i_regs->regmap,LOREG);
+        assert(remh>=0);
+        assert(reml>=0);
+        assert(quoh>=0);
+        assert(quol>=0);
+        emit_mov(numl,quol);
+        emit_orrshl64(numh,32,quol);
+        emit_mov(denoml,quoh);
+        emit_orrshl64(denomh,32,quoh);
+        emit_udiv64(quol,quoh,reml);
+        emit_msub64(reml,quoh,quol,remh);
+        emit_mov(reml,quol);
+        emit_shrimm64(reml,32,quoh);
+        emit_mov(remh,reml);
+        emit_shrimm64(remh,32,remh);
       }
     }
   }
