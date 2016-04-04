@@ -324,7 +324,7 @@ static void print_debug_info(u_int vaddr)
   DebugMessage(M64MSG_INFO, "rdram checksum:%x",rdram_checksum());
   DebugMessage(M64MSG_INFO, "gpr checksum:%x",gpr_sum);
   DebugMessage(M64MSG_INFO, "fpr checksum:%x",fpr_sum);
-  if(gpr_sum!=0){
+  /*if(gpr_sum!=0){
     for(i=0;i<32;i++)
       DebugMessage(M64MSG_INFO, "r%d:%.8x%.8x",i,((int *)(reg+i))[1],((int *)(reg+i))[0]);
   }
@@ -332,6 +332,10 @@ static void print_debug_info(u_int vaddr)
     for(i=0;i<32;i++)
       DebugMessage(M64MSG_INFO, "f%d:%.8x%.8x",i,((int*)reg_cop1_simple[i])[1],*((int*)reg_cop1_simple[i]));
   }
+  if(cop0_sum!=0){
+    for(i=0;i<32;i++)
+      DebugMessage(M64MSG_INFO, "cop0%d:%.8x",i,g_cp0_regs[i]);
+  }*/
   DebugMessage(M64MSG_INFO, "hi:%.8x%.8x, lo:%.8x%.8x",(int)(hi>>32),(int)hi,(int)(lo>>32),(int)lo);
   DebugMessage(M64MSG_INFO, "FCR31:%.8x, FCR0:%.8x",FCR31,FCR0);
   DebugMessage(M64MSG_INFO, "count:%.8x, next:%.8x\n",g_cp0_regs[CP0_COUNT_REG],next_interupt);
@@ -3612,7 +3616,6 @@ static void c1ls_assemble(int i,struct regstat *i_regs)
     #ifdef RAM_OFFSET
     if (!c||opcode[i]==0x39||opcode[i]==0x3D) // SWC1/SDC1
     {
-      assert(0); // TOBEDONE: ROREG register is 64bit
       map=get_reg(i_regs->regmap,ROREG);
       if(map<0) emit_loadreg(ROREG,map=HOST_TEMPREG);
     }
