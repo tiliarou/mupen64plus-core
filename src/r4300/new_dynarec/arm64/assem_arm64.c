@@ -576,7 +576,8 @@ static void *kill_pointer(void *stub)
 {
   int *ptr=(int *)((intptr_t)stub+8);
   assert((*ptr&0x9f000000)==0x10000000); //adr
-  int *i_ptr=(int*)((intptr_t)ptr+(((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3));
+  int offset=(((signed int)(*ptr<<8)>>13)<<2)|((*ptr>>29)&0x3);
+  int *i_ptr=(int*)((intptr_t)ptr+offset);
   assert((*i_ptr&0xfc000000)==0x14000000); //b
   set_jump_target((intptr_t)i_ptr,(intptr_t)stub);
   return i_ptr;
@@ -586,7 +587,8 @@ static intptr_t get_pointer(void *stub)
 {
   int *ptr=(int *)((intptr_t)stub+8);
   assert((*ptr&0x9f000000)==0x10000000); //adr
-  int *i_ptr=(int*)((intptr_t)ptr+(((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3));
+  int offset=(((signed int)(*ptr<<8)>>13)<<2)|((*ptr>>29)&0x3);
+  int *i_ptr=(int*)((intptr_t)ptr+offset);
   assert((*i_ptr&0xfc000000)==0x14000000); //b
   return (intptr_t)i_ptr+(((signed int)(*i_ptr<<6)>>6)<<2);
 }
@@ -618,11 +620,13 @@ static int verify_dirty(void *addr)
     ptr+=2;
   }
   else if((*ptr&0x9f000000)==0x10000000){ //adr
-    source=(intptr_t)ptr+(((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3);
+    int offset=(((signed int)(*ptr<<8)>>13)<<2)|((*ptr>>29)&0x3);
+    source=(intptr_t)ptr+offset;
     ptr++;
   }
   else if((*ptr&0x9f000000)==0x90000000){ //adrp
-    source=((intptr_t)ptr&(intptr_t)(~0xfff))+((((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3)<<12);
+    int offset=(((signed int)(*ptr<<8)>>13)<<2)|((*ptr>>29)&0x3);
+    source=((intptr_t)ptr&(intptr_t)(~0xfff))+((intptr_t)offset<<12);
     ptr++;
     if((*ptr&0xff000000)==0x91000000){//add
       source|=(*ptr>>10)&0xfff;
@@ -634,11 +638,13 @@ static int verify_dirty(void *addr)
 
   uintptr_t copy=0;
   if((*ptr&0x9f000000)==0x10000000){ //adr
-    copy=(intptr_t)ptr+(((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3);
+    int offset=(((signed int)(*ptr<<8)>>13)<<2)|((*ptr>>29)&0x3);
+    copy=(intptr_t)ptr+offset;
     ptr++;
   }
   else if((*ptr&0x9f000000)==0x90000000){ //adrp
-    copy=((intptr_t)ptr&(intptr_t)(~0xfff))+((((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3)<<12);
+    int offset=(((signed int)(*ptr<<8)>>13)<<2)|((*ptr>>29)&0x3);
+    copy=((intptr_t)ptr&(intptr_t)(~0xfff))+((intptr_t)offset<<12);
     ptr++;
     if((*ptr&0xff000000)==0x91000000){//add
       copy|=(*ptr>>10)&0xfff;
@@ -703,11 +709,13 @@ static void get_bounds(intptr_t addr,uintptr_t *start,uintptr_t *end)
     ptr+=2;
   }
   else if((*ptr&0x9f000000)==0x10000000){ //adr
-    source=(intptr_t)ptr+(((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3);
+    int offset=(((signed int)(*ptr<<8)>>13)<<2)|((*ptr>>29)&0x3);
+    source=(intptr_t)ptr+offset;
     ptr++;
   }
   else if((*ptr&0x9f000000)==0x90000000){ //adrp
-    source=((intptr_t)ptr&(intptr_t)(~0xfff))+((((signed int)(*ptr<<8)>>11)|(*ptr>>29)&0x3)<<12);
+    int offset=(((signed int)(*ptr<<8)>>13)<<2)|((*ptr>>29)&0x3);
+    source=((intptr_t)ptr&(intptr_t)(~0xfff))+((intptr_t)offset<<12);
     ptr++;
     if((*ptr&0xff000000)==0x91000000){//add
       source|=(*ptr>>10)&0xfff;
@@ -5610,7 +5618,7 @@ static void multdiv_assemble_arm64(int i,struct regstat *i_regs)
         assert(quotient>=0);
         assert(remainder>=0);
         emit_test(denominator,denominator);
-        emit_jeq((int)out+12); // Division by zero
+        emit_jeq((intptr_t)out+12); // Division by zero
         emit_sdiv(numerator,denominator,quotient);
         emit_msub(quotient,denominator,numerator,remainder);
       }
@@ -5626,7 +5634,7 @@ static void multdiv_assemble_arm64(int i,struct regstat *i_regs)
         assert(quotient>=0);
         assert(remainder>=0);
         emit_test(denominator,denominator);
-        emit_jeq((int)out+12); // Division by zero
+        emit_jeq((intptr_t)out+12); // Division by zero
         emit_udiv(numerator,denominator,quotient);
         emit_msub(quotient,denominator,numerator,remainder);
       }

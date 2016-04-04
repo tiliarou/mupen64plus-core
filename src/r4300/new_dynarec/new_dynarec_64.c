@@ -1227,12 +1227,12 @@ void invalidate_block(u_int block)
     if(vpage>2047||(head->vaddr>>12)==block) { // Ignore vaddr hash collision
       get_bounds((intptr_t)head->addr,&start,&end);
 
-      //FIXME: get_bounds returns the virtual start/end addr if vaddr>0xC0000000
+      //TOBEDONE: get_bounds returns the virtual start/end addr if vaddr>0xC0000000
       //otherwise it return a pointer to the source code 
       //so the virtual start/end addr is equal to (uintptr_t)source-(uintptr_t)grdram+0x80000000
 
       //DebugMessage(M64MSG_VERBOSE, "start: %x end: %x",start,end);
-      if(page<2048&&start>=0x80000000&&end<0x80800000) {
+      /*if(page<2048&&start>=0x80000000&&end<0x80800000) {
         if(((start-(uintptr_t)g_rdram)>>12)<=page&&((end-1-(uintptr_t)g_rdram)>>12)>=page) {
           if((((start-(uintptr_t)g_rdram)>>12)&2047)<first) first=((start-(uintptr_t)g_rdram)>>12)&2047;
           if((((end-1-(uintptr_t)g_rdram)>>12)&2047)>last) last=((end-1-(uintptr_t)g_rdram)>>12)&2047;
@@ -1243,7 +1243,7 @@ void invalidate_block(u_int block)
           if((((start+memory_map[start>>12]-(uintptr_t)g_rdram)>>12)&2047)<first) first=((start+memory_map[start>>12]-(uintptr_t)g_rdram)>>12)&2047;
           if((((end-1+memory_map[(end-1)>>12]-(uintptr_t)g_rdram)>>12)&2047)>last) last=((end-1+memory_map[(end-1)>>12]-(uintptr_t)g_rdram)>>12)&2047;
         }
-      }
+      }*/
     }
     head=head->next;
   }
