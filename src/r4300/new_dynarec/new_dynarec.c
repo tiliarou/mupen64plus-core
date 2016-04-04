@@ -315,7 +315,6 @@ static int cop0_checksum(void)
 
 static void print_debug_info(u_int vaddr)
 {
-  int i;
   int gpr_sum = gpr_checksum();
   int fpr_sum = fpr_checksum();
   int cop0_sum = cop0_checksum();
@@ -323,7 +322,9 @@ static void print_debug_info(u_int vaddr)
   DebugMessage(M64MSG_INFO, "rdram checksum:%x",rdram_checksum());
   DebugMessage(M64MSG_INFO, "gpr checksum:%x",gpr_sum);
   DebugMessage(M64MSG_INFO, "fpr checksum:%x",fpr_sum);
-  /*if(gpr_sum!=0){
+  DebugMessage(M64MSG_INFO, "cop0_checksum:%x",cop0_sum);
+  /*int i;
+  if(gpr_sum!=0){
     for(i=0;i<32;i++)
       DebugMessage(M64MSG_INFO, "r%d:%.8x%.8x",i,((int *)(reg+i))[1],((int *)(reg+i))[0]);
   }

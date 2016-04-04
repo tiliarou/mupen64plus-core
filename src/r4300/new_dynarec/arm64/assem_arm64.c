@@ -41,7 +41,6 @@ static void *dynamic_linker(void * src, u_int vaddr);
 static void *dynamic_linker_ds(void * src, u_int vaddr);
 static void invalidate_addr(u_int addr);
 
-static u_int literals[1024][2];
 static unsigned int needs_clear_cache[1<<(TARGET_SIZE_2-17)];
 
 static const uintptr_t jump_vaddr_reg[32] = {
@@ -564,12 +563,9 @@ static void *dynamic_linker_ds(void * src, u_int vaddr)
 }
 
 /* Literal pool */
-static void add_literal(int addr,int val)
+static void add_literal(intptr_t addr,int val)
 {
   assert(0);
-  literals[literalcount][0]=addr;
-  literals[literalcount][1]=val;
-  literalcount++; 
 } 
 
 static void *kill_pointer(void *stub)
@@ -616,7 +612,7 @@ static int verify_dirty(void *addr)
   uintptr_t source=0;
   if((*ptr&0xffe00000)==0x52a00000){ //movz
     assert((ptr[1]&0xffe00000)==0x72800000); //movk
-    source=(((ptr[0]>>5)&0xffff)<<16)|(ptr[1]>>5)&0xffff;
+    source=(((ptr[0]>>5)&0xffff)<<16)|((ptr[1]>>5)&0xffff);
     ptr+=2;
   }
   else if((*ptr&0x9f000000)==0x10000000){ //adr
@@ -702,7 +698,7 @@ static void get_bounds(intptr_t addr,uintptr_t *start,uintptr_t *end)
   uintptr_t source=0;
   if((*ptr&0xffe00000)==0x52a00000){ //movz
     assert((ptr[1]&0xffe00000)==0x72800000); //movk
-    source=(((ptr[0]>>5)&0xffff)<<16)|(ptr[1]>>5)&0xffff;
+    source=(((ptr[0]>>5)&0xffff)<<16)|((ptr[1]>>5)&0xffff);
     ptr+=2;
   }
   else if((*ptr&0x9f000000)==0x10000000){ //adr
@@ -1201,7 +1197,7 @@ static void alloc_reg_temp(struct regstat *cur,int i,signed char tr)
   DebugMessage(M64MSG_ERROR, "This shouldn't happen");exit(1);
 }
 // Allocate a specific ARM64 register.
-static void alloc_arm64_reg(struct regstat *cur,int i,signed char tr,char hr)
+static void alloc_arm64_reg(struct regstat *cur,int i,signed char tr,int hr)
 {
   int n;
   int dirty=0;
@@ -1628,7 +1624,7 @@ static void emit_loadlp(u_int imm,u_int rt)
 {
   assert(0);
   assert(rt!=29);
-  add_literal((int)out,imm);
+  add_literal((intptr_t)out,imm);
   assem_debug("ldr %s,pc+? [=%x]",regname[rt],imm);
   output_w32(0xe5900000|rd_rn_rm(rt,15,0));
 }
@@ -2744,7 +2740,7 @@ static void emit_movsbl(int addr, int rt)
 {
   assert(0);
   assert(rt!=29);
-  u_int offset = addr-(u_int)&dynarec_local;
+  u_int offset = addr-(uintptr_t)&dynarec_local;
   assert(offset<256);
   assem_debug("ldrsb %s,fp+%d",regname[rt],offset);
   output_w32(0xe1d000d0|rd_rn_rm(rt,FP,0)|((offset<<4)&0xf00)|(offset&0xf));
@@ -2753,7 +2749,7 @@ static void emit_movswl(int addr, int rt)
 {
   assert(0);
   assert(rt!=29);
-  u_int offset = addr-(u_int)&dynarec_local;
+  u_int offset = addr-(uintptr_t)&dynarec_local;
   assert(offset<256);
   assem_debug("ldrsh %s,fp+%d",regname[rt],offset);
   output_w32(0xe1d000f0|rd_rn_rm(rt,FP,0)|((offset<<4)&0xf00)|(offset&0xf));
@@ -2769,7 +2765,7 @@ static void emit_movzbl(intptr_t addr, int rt)
 static void emit_movzwl(int addr, int rt)
 {
   assert(rt!=29);
-  u_int offset = addr-(u_int)&dynarec_local;
+  u_int offset = addr-(uintptr_t)&dynarec_local;
   assert(offset<8190);
   assert(offset%2 == 0); /* 2 bytes aligned */
   assem_debug("ldrh %s,fp+%d",regname[rt],offset);
@@ -3691,34 +3687,12 @@ static void literal_pool(int n)
 {
   if(!literalcount) return;
   assert(0);
-  if(n) {
-    if((int)out-literals[0][0]<4096-n) return;
-  }
-  u_int *ptr;
-  int i;
-  for(i=0;i<literalcount;i++)
-  {
-    ptr=(u_int *)literals[i][0];
-    u_int offset=(u_int)out-(u_int)ptr-8;
-    assert(offset<4096);
-    assert(!(offset&3));
-    *ptr|=offset;
-    output_w32(literals[i][1]);
-  }
-  literalcount=0;
 }
 
 static void literal_pool_jumpover(int n)
 {
   if(!literalcount) return;
   assert(0);
-  if(n) {
-    if((int)out-literals[0][0]<4096-n) return;
-  }
-  int jaddr=(int)out;
-  emit_jmp(0);
-  literal_pool(0);
-  set_jump_target(jaddr,(int)out);
 }
 
 static void emit_extjump2(intptr_t addr, int target, intptr_t linker)
@@ -4133,7 +4107,7 @@ static void do_dirty_stub_ds(void)
 {
   assert(0);
   // Careful about the code output here, verify_dirty and get_bounds needs to parse it.
-  #ifdef ARMv5_ONLY
+  /*#ifdef ARMv5_ONLY
   emit_loadlp((int)start<(int)0xC0000000?(int)source:(int)start,1);
   emit_loadlp((int)copy,2);
   emit_loadlp(slen*4,3);
@@ -4145,7 +4119,7 @@ static void do_dirty_stub_ds(void)
   emit_movw(slen*4,3);
   #endif
   emit_movimm(start+1,0);
-  emit_call((int)&verify_code_ds);
+  emit_call((int)&verify_code_ds);*/
 }
 
 static void do_cop1stub(int n)
@@ -4154,7 +4128,7 @@ static void do_cop1stub(int n)
   assem_debug("do_cop1stub %x",start+stubs[n][3]*4);
   set_jump_target(stubs[n][1],(intptr_t)out);
   int i=stubs[n][3];
-  int rs=stubs[n][4];
+  //int rs=stubs[n][4];
   struct regstat *i_regs=(struct regstat *)stubs[n][5];
   int ds=stubs[n][6];
   if(!ds) {
@@ -4188,7 +4162,7 @@ static int do_tlb_r(int s,int ar,int map,int cache,int x,int a,int shift,int c,u
       // Use cached offset to memory map
       emit_addsr12(cache,s,map);
     }else{
-      emit_movimm(((int)memory_map-(int)&dynarec_local)>>2,map);
+      emit_movimm(((intptr_t)memory_map-(intptr_t)&dynarec_local)>>2,map);
       emit_addsr12(map,s,map);
     }
     // Schedule this while we wait on the load
@@ -4204,7 +4178,7 @@ static int do_tlb_r_branch(int map, int c, u_int addr, intptr_t *jaddr)
   assert(0);
   if(!c||(signed int)addr>=(signed int)0xC0000000) {
     emit_test(map,map);
-    *jaddr=(int)out;
+    *jaddr=(intptr_t)out;
     emit_js(0);
   }
   return map;
@@ -4234,7 +4208,7 @@ static int do_tlb_w(int s,int ar,int map,int cache,int x,int c,u_int addr)
       // Use cached offset to memory map
       emit_addsr12(cache,s,map);
     }else{
-      emit_movimm(((int)memory_map-(int)&dynarec_local)>>2,map);
+      emit_movimm(((intptr_t)memory_map-(intptr_t)&dynarec_local)>>2,map);
       emit_addsr12(map,s,map);
     }
     // Schedule this while we wait on the load
@@ -4248,7 +4222,7 @@ static void do_tlb_w_branch(int map, int c, u_int addr, intptr_t *jaddr)
   assert(0);
   if(!c||addr<0x80800000||addr>=0xC0000000) {
     emit_testimm(map,0x40000000);
-    *jaddr=(int)out;
+    *jaddr=(intptr_t)out;
     emit_jne(0);
   }
 }
@@ -4272,7 +4246,7 @@ static void gen_orig_addr_w(int ar, int map) {
 static void generate_map_const(u_int addr,int tr) {
   assert(0);
   //DebugMessage(M64MSG_VERBOSE, "generate_map_const(%x,%s)",addr,regname[tr]);
-  emit_movimm((addr>>12)+(((u_int)memory_map-(u_int)&dynarec_local)>>2),tr);
+  emit_movimm((addr>>12)+(((uintptr_t)memory_map-(uintptr_t)&dynarec_local)>>2),tr);
 }
 
 /* Special assem */
@@ -5927,7 +5901,7 @@ static void do_clear_cache(void)
   {
     u_int bitmap=needs_clear_cache[i];
     if(bitmap) {
-      u_int start,end;
+      uintptr_t start,end;
       for(j=0;j<32;j++) 
       {
         if(bitmap&(1<<j)) {
@@ -5939,7 +5913,7 @@ static void do_clear_cache(void)
               end+=4096;
               j++;
             }else{
-              __clear_cache((void *)start,(void *)end);
+              __clear_cache((char *)start,(char *)end);
               //cacheflush((void *)start,(void *)end,0);
               break;
             }
