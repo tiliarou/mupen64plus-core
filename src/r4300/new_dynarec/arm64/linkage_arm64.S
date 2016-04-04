@@ -295,7 +295,44 @@ GLOBAL_FUNCTION(verify_code_vm):
     brk 0
     
 GLOBAL_FUNCTION(verify_code):
-    brk 0
+    /* x1 = source */
+    /* x2 = copy */
+    /* w3 = length */
+    tst    w3, #4
+    add    x3, x1, x3
+    mov    w4, #0
+    mov    w5, #0
+    mov    w12, #0
+    b.eq   .D1
+    ldr    w4, [x1], #4
+    ldr    w5, [x2], #4
+.D1:
+    cmp    x1, x3
+    b.eq   .D3
+.D2:
+    ldr    w7, [x1], #4
+    eor    w9, w4, w5
+    ldr    w8, [x2], #4
+    orr    w9, w9, w12
+    tst    w9, w9
+    b.ne   .D4
+    ldr    w4, [x1], #4
+    eor    w12, w7, w8
+    ldr    w5, [x2], #4
+    cmp    x1, x3
+    b.cc    .D2
+    cmp    w7, w8
+    b.ne   .D4
+.D3:
+    cmp    w4, w5
+.D4:
+    ldr    w19, [x29, #branch_target-dynarec_local]
+    b.eq   .D6
+.D5:
+    bl     get_addr
+    br     x0
+.D6:
+    ret
     
 GLOBAL_FUNCTION(cc_interrupt):
     ldr    w0, [x29, #last_count-dynarec_local]
