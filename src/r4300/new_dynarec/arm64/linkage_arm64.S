@@ -294,6 +294,7 @@ GLOBAL_FUNCTION(verify_code_ds):
 GLOBAL_FUNCTION(verify_code_vm):
     brk 0
     
+/*TOBEDONE: Optimize for 64bit*/
 GLOBAL_FUNCTION(verify_code):
     /* x1 = source */
     /* x2 = copy */
@@ -413,7 +414,50 @@ GLOBAL_FUNCTION(indirect_jump):
     br     x0
     
 GLOBAL_FUNCTION(jump_eret):
-    brk 0
+    ldr    w1, [x29, #g_cp0_regs+48-dynarec_local] /* Status */
+    ldr    w0, [x29, #last_count-dynarec_local]
+    bic    w1, w1, #2
+    add    w20, w0, w20
+    str    w1, [x29, #g_cp0_regs+48-dynarec_local] /* Status */
+    str    w20, [x29, #g_cp0_regs+36-dynarec_local] /* Count */
+    bl     check_interupt
+    ldr    w1, [x29, #next_interupt-dynarec_local]
+    ldr    w0, [x29, #g_cp0_regs+56-dynarec_local] /* EPC */
+    str    w1, [x29, #last_count-dynarec_local]
+    subs   w20, w20, w1
+    b.pl   .E11
+.E8:
+    add    x6, x29, #reg+256-dynarec_local
+    mov    w5, #248
+    mov    w1, #0
+.E9:
+/*TOBEDONE: Optimize for 64bit*/
+    sub    x6, x6, #8
+    ldr    w2, [x6]
+    ldr    w3, [x6, #4]
+    eor    w3, w3, w2, asr #31
+    subs   w3, w3, #1
+    adc    w1, w1, w1
+    subs   w5, w5, #8
+    b.ne    .E9
+    ldr    w2, [x29, #hi-dynarec_local]
+    ldr    w3, [x29, #hi+4-dynarec_local]
+    eor    w3, w3, w2, asr #31
+    tst    w3, w3
+    b.ne   .E10
+    ldr    w2, [x29, #lo-dynarec_local]
+    ldr    w3, [x29, #lo+4-dynarec_local]
+    eor    w3, w3, w2, asr #31
+.E10:
+    subs   w3, w3, #1
+    adc    w1, w1, w1
+    bl     get_addr_32
+    br     x0
+.E11:
+    str    w0, [x29, #pcaddr-dynarec_local]
+    bl     cc_interrupt
+    ldr    w0, [x29, #pcaddr-dynarec_local]
+    b      .E8
     
 GLOBAL_FUNCTION(new_dyna_start):
     adrp   x16, dynarec_local
