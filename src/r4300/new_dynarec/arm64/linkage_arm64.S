@@ -406,10 +406,23 @@ GLOBAL_FUNCTION(do_interrupt):
     br     x0
     
 GLOBAL_FUNCTION(fp_exception):
-    brk 0
+    mov    w2, #0x10000000
+.F1:
+    ldr    w1, [x29, #g_cp0_regs+48-dynarec_local] /* Status */
+    mov    w3, #0x80000000
+    str    w0, [x29, #g_cp0_regs+56-dynarec_local] /* EPC */
+    orr    w1, w1, #2
+    add    w2, w2, #0x2c
+    str    w1, [x29, #g_cp0_regs+48-dynarec_local] /* Status */
+    str    w2, [x29, #g_cp0_regs+52-dynarec_local] /* Cause */
+    add    w0, w3, #0x180
+    bl     get_addr_ht
+    br     x0
     
 GLOBAL_FUNCTION(fp_exception_ds):
-    brk 0
+    brk    0
+    mov    w2, #0x90000000 /* Set high bit if delay slot */
+    b      .F1
     
 GLOBAL_FUNCTION(jump_syscall):
     brk 0
