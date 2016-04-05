@@ -265,6 +265,9 @@ GLOBAL_FUNCTION(jump_vaddr_x7):
  
 GLOBAL_FUNCTION(jump_vaddr):
     str    w20, [x29, #cycle_count-dynarec_local]
+    ldr    w18, [x29, #last_count-dynarec_local]
+    add    w20, w18, w20 /* Count */
+    str    w20, [x29, #g_cp0_regs+36-dynarec_local] /* Count */
     bl     get_addr_ht
     ldr    w20, [x29, #cycle_count-dynarec_local]
     br     x0

@@ -268,8 +268,9 @@ static void nullf() {}
 #endif
 
 #ifdef NEW_DYNAREC_DEBUG
-//#undef USE_MINI_HT
+#undef USE_MINI_HT
 #define DEBUG_CYCLE_COUNT
+static FILE * pDebugFile=NULL;
 static int rdram_checksum(void)
 {
   int i;
@@ -315,30 +316,33 @@ static int cop0_checksum(void)
 
 static void print_debug_info(u_int vaddr)
 {
+  if(pDebugFile == NULL)
+    return;
+
   int gpr_sum = gpr_checksum();
   int fpr_sum = fpr_checksum();
   int cop0_sum = cop0_checksum();
-  DebugMessage(M64MSG_INFO, "target addr:%.8x",vaddr);
-  DebugMessage(M64MSG_INFO, "rdram checksum:%x",rdram_checksum());
-  DebugMessage(M64MSG_INFO, "gpr checksum:%x",gpr_sum);
-  DebugMessage(M64MSG_INFO, "fpr checksum:%x",fpr_sum);
-  DebugMessage(M64MSG_INFO, "cop0_checksum:%x",cop0_sum);
+  fprintf(pDebugFile, "target addr:%.8x\n",vaddr);
+  fprintf(pDebugFile, "rdram checksum:%x\n",rdram_checksum());
+  fprintf(pDebugFile, "gpr checksum:%x\n",gpr_sum);
+  fprintf(pDebugFile, "fpr checksum:%x\n",fpr_sum);
+  fprintf(pDebugFile, "cop0_checksum:%x\n",cop0_sum);
   /*int i;
   if(gpr_sum!=0){
     for(i=0;i<32;i++)
-      DebugMessage(M64MSG_INFO, "r%d:%.8x%.8x",i,((int *)(reg+i))[1],((int *)(reg+i))[0]);
+      printf(pDebugFile, "r%d:%.8x%.8x\n",i,((int *)(reg+i))[1],((int *)(reg+i))[0]);
   }
   if(fpr_sum!=0){
     for(i=0;i<32;i++)
-      DebugMessage(M64MSG_INFO, "f%d:%.8x%.8x",i,((int*)reg_cop1_simple[i])[1],*((int*)reg_cop1_simple[i]));
+      printf(pDebugFile, "f%d:%.8x%.8x\n",i,((int*)reg_cop1_simple[i])[1],*((int*)reg_cop1_simple[i]));
   }
   if(cop0_sum!=0){
     for(i=0;i<32;i++)
-      DebugMessage(M64MSG_INFO, "cop0%d:%.8x",i,g_cp0_regs[i]);
+      printf(pDebugFile, "cop0%d:%.8x\n",i,g_cp0_regs[i]);
   }*/
-  DebugMessage(M64MSG_INFO, "hi:%.8x%.8x, lo:%.8x%.8x",(int)(hi>>32),(int)hi,(int)(lo>>32),(int)lo);
-  DebugMessage(M64MSG_INFO, "FCR31:%.8x, FCR0:%.8x",FCR31,FCR0);
-  DebugMessage(M64MSG_INFO, "count:%.8x, next:%.8x\n",g_cp0_regs[CP0_COUNT_REG],next_interupt);
+  fprintf(pDebugFile, "hi:%.8x%.8x, lo:%.8x%.8x\n",(int)(hi>>32),(int)hi,(int)(lo>>32),(int)lo);
+  fprintf(pDebugFile, "FCR31:%.8x, FCR0:%.8x\n",FCR31,FCR0);
+  fprintf(pDebugFile, "count:%.8x, next:%.8x\n\n",g_cp0_regs[CP0_COUNT_REG],next_interupt);
 }
 #endif
 
@@ -7656,10 +7660,12 @@ static void disassemble_inst(int i)
 
 void new_dynarec_init(void)
 {
+#ifdef NEW_DYNAREC_DEBUG
+  pDebugFile = fopen("new_dynarec_debug.txt","w");
+#endif
 #if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
   profiler_init();
 #endif
-
 #ifndef PROFILER
   DebugMessage(M64MSG_INFO, "Init new dynarec");
 #if NEW_DYNAREC >= NEW_DYNAREC_ARM
@@ -7740,6 +7746,9 @@ void new_dynarec_init(void)
 
 void new_dynarec_cleanup(void)
 {
+#ifdef NEW_DYNAREC_DEBUG
+  fclose(pDebugFile);
+#endif
 #if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
   profiler_cleanup();
 #endif
