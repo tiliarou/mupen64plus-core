@@ -3563,6 +3563,7 @@ static void storelr_assemble(int i,struct regstat *i_regs)
 }
 #endif
 
+#ifndef c1ls_assemble
 static void c1ls_assemble(int i,struct regstat *i_regs)
 {
   int s,th,tl;
@@ -3756,6 +3757,7 @@ static void c1ls_assemble(int i,struct regstat *i_regs)
     emit_popa();
   }*/
 }
+#endif
 
 #ifndef multdiv_assemble
 void multdiv_assemble(int i,struct regstat *i_regs)

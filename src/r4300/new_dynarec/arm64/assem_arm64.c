@@ -2725,6 +2725,15 @@ static void emit_readword(intptr_t addr, int rt)
   assem_debug("ldr %s,fp+%d",regname[rt],offset);
   output_w32(0xb9400000|((offset>>2)<<10)|(FP<<5)|rt);
 }
+static void emit_readword64(intptr_t addr, int rt)
+{
+  assert(rt!=29);
+  u_int offset = addr-(uintptr_t)&dynarec_local;
+  assert(offset<32760);
+  assert(offset%8 == 0); /* 8 bytes aligned */
+  assem_debug("ldr %s,fp+%d",regname64[rt],offset);
+  output_w32(0xf9400000|((offset>>3)<<10)|(FP<<5)|rt);
+}
 static void emit_movsbl(int addr, int rt)
 {
   assert(rt!=29);
@@ -2876,7 +2885,7 @@ static void emit_writeword64(int rt, intptr_t addr)
   u_int offset = addr-(uintptr_t)&dynarec_local;
   assert(offset<32760);
   assert(offset%8 == 0); /* 8 bytes aligned */
-  assem_debug("str %s,fp+%d",regname[rt],offset);
+  assem_debug("str %s,fp+%d",regname64[rt],offset);
   output_w32(0xf9000000|((offset>>3)<<10)|(FP<<5)|rt);
 }
 static void emit_writehword(int rt, int addr)
@@ -4865,7 +4874,7 @@ static void cop1_assemble(int i,struct regstat *i_regs)
   if (opcode2[i]==0) { // MFC1
     signed char tl=get_reg(i_regs->regmap,rt1[i]);
     if(tl>=0) {
-      emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],tl);
+      emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],tl);
       emit_readword_indexed(0,tl,tl);
     }
   }
@@ -4873,7 +4882,7 @@ static void cop1_assemble(int i,struct regstat *i_regs)
     signed char tl=get_reg(i_regs->regmap,rt1[i]);
     signed char th=get_reg(i_regs->regmap,rt1[i]|64);
     if(tl>=0) {
-      emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],tl);
+      emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],tl);
       if(th>=0) emit_readword_indexed(4,tl,th);
       emit_readword_indexed(0,tl,tl);
     }
@@ -4881,14 +4890,14 @@ static void cop1_assemble(int i,struct regstat *i_regs)
   else if (opcode2[i]==4) { // MTC1
     signed char sl=get_reg(i_regs->regmap,rs1[i]);
     signed char temp=get_reg(i_regs->regmap,-1);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
     emit_writeword_indexed(sl,0,temp);
   }
   else if (opcode2[i]==5) { // DMTC1
     signed char sl=get_reg(i_regs->regmap,rs1[i]);
     signed char sh=rs1[i]>0?get_reg(i_regs->regmap,rs1[i]|64):sl;
     signed char temp=get_reg(i_regs->regmap,-1);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
     emit_writeword_indexed(sh,4,temp);
     emit_writeword_indexed(sl,0,temp);
   }
@@ -4918,6 +4927,201 @@ static void cop1_assemble(int i,struct regstat *i_regs)
   }
 }
 
+static void c1ls_assemble_arm64(int i,struct regstat *i_regs)
+{
+  int s,th,tl;
+  int temp,ar;
+  int map=-1;
+  int offset;
+  int c=0;
+  intptr_t jaddr=0;
+  intptr_t jaddr2=0;
+  intptr_t jaddr3=0;
+  int type=0;
+  int agr=AGEN1+(i&1);
+  u_int hr,reglist=0;
+  th=get_reg(i_regs->regmap,FTEMP|64);
+  tl=get_reg(i_regs->regmap,FTEMP);
+  s=get_reg(i_regs->regmap,rs1[i]);
+  temp=get_reg(i_regs->regmap,agr);
+  if(temp<0) temp=get_reg(i_regs->regmap,-1);
+  offset=imm[i];
+  assert(tl>=0);
+  assert(rs1[i]>0);
+  assert(temp>=0);
+  for(hr=0;hr<HOST_REGS;hr++) {
+    if(i_regs->regmap[hr]>=0) reglist|=1<<hr;
+  }
+  if(i_regs->regmap[HOST_CCREG]==CCREG) reglist&=~(1<<HOST_CCREG);
+  if (opcode[i]==0x31||opcode[i]==0x35) // LWC1/LDC1
+  {
+    // Loads use a temporary register which we need to save
+    reglist|=1<<temp;
+  }
+  if (opcode[i]==0x39||opcode[i]==0x3D) // SWC1/SDC1
+    ar=temp;
+  else // LWC1/LDC1
+    ar=tl;
+  //if(s<0) emit_loadreg(rs1[i],ar); //address_generation does this now
+  //else c=(i_regs->wasconst>>s)&1;
+  if(s>=0) c=(i_regs->wasconst>>s)&1;
+  // Check cop1 unusable
+  if(!cop1_usable) {
+    signed char rs=get_reg(i_regs->regmap,CSREG);
+    assert(rs>=0);
+    emit_testimm(rs,0x20000000);
+    jaddr=(intptr_t)out;
+    emit_jeq(0);
+    add_stub(FP_STUB,jaddr,(intptr_t)out,i,rs,(intptr_t)i_regs,is_delayslot,0);
+    cop1_usable=1;
+  }
+  if (opcode[i]==0x39) { // SWC1 (get float address)
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>16)&0x1f],tl);
+  }
+  if (opcode[i]==0x3D) { // SDC1 (get double address)
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>16)&0x1f],tl);
+  }
+  // Generate address + offset
+  if(!using_tlb) {
+    #ifdef RAM_OFFSET
+    if (!c||opcode[i]==0x39||opcode[i]==0x3D) // SWC1/SDC1
+    {
+      map=get_reg(i_regs->regmap,ROREG);
+      if(map<0) emit_loadreg(ROREG,map=HOST_TEMPREG);
+    }
+    #endif
+    if(!c) 
+      emit_cmpimm(offset||c||s<0?ar:s,0x800000);
+  }
+  else
+  {
+    map=get_reg(i_regs->regmap,TLREG);
+    int cache=get_reg(i_regs->regmap,MMREG);
+    assert(map>=0);
+    reglist&=~(1<<map);
+    if (opcode[i]==0x31||opcode[i]==0x35) { // LWC1/LDC1
+      map=do_tlb_r(offset||c||s<0?ar:s,ar,map,cache,0,-1,-1,c,constmap[i][s]+offset);
+    }
+    if (opcode[i]==0x39||opcode[i]==0x3D) { // SWC1/SDC1
+      map=do_tlb_w(offset||c||s<0?ar:s,ar,map,cache,0,c,constmap[i][s]+offset);
+    }
+  }
+  if (opcode[i]==0x39) { // SWC1 (read float)
+    emit_readword_indexed(0,tl,tl);
+  }
+  if (opcode[i]==0x3D) { // SDC1 (read double)
+    emit_readword_indexed(4,tl,th);
+    emit_readword_indexed(0,tl,tl);
+  }
+  if (opcode[i]==0x31) { // LWC1 (get target address)
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>16)&0x1f],temp);
+  }
+  if (opcode[i]==0x35) { // LDC1 (get target address)
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>16)&0x1f],temp);
+  }
+  if(!using_tlb) {
+    if(!c) {
+      jaddr2=(intptr_t)out;
+      emit_jno(0);
+    }
+    else if(((signed int)(constmap[i][s]+offset))>=(signed int)0x80800000) {
+      jaddr2=(intptr_t)out;
+      emit_jmp(0); // inline_readstub/inline_writestub?  Very rare case
+    }
+    #ifdef DESTRUCTIVE_SHIFT
+    if (opcode[i]==0x39||opcode[i]==0x3D) { // SWC1/SDC1
+      if(!offset&&!c&&s>=0) emit_mov(s,ar);
+    }
+    #endif
+  }else{
+    if (opcode[i]==0x31||opcode[i]==0x35) { // LWC1/LDC1
+      do_tlb_r_branch(map,c,constmap[i][s]+offset,&jaddr2);
+    }
+    if (opcode[i]==0x39||opcode[i]==0x3D) { // SWC1/SDC1
+      do_tlb_w_branch(map,c,constmap[i][s]+offset,&jaddr2);
+    }
+  }
+  if (opcode[i]==0x31) { // LWC1
+    //if(s>=0&&!c&&!offset) emit_mov(s,tl);
+    //gen_tlb_addr_r(ar,map);
+    //emit_readword_indexed((intptr_t)g_rdram-0x80000000,tl,tl);
+    #ifdef HOST_IMM_ADDR32
+    if(c) emit_readword_tlb(constmap[i][s]+offset,map,tl);
+    else
+    #endif
+    emit_readword_indexed_tlb(0,offset||c||s<0?tl:s,map,tl);
+    type=LOADW_STUB;
+  }
+  if (opcode[i]==0x35) { // LDC1
+    assert(th>=0);
+    //if(s>=0&&!c&&!offset) emit_mov(s,tl);
+    //gen_tlb_addr_r(ar,map);
+    //emit_readword_indexed((intptr_t)g_rdram-0x80000000,tl,th);
+    //emit_readword_indexed((intptr_t)g_rdram-0x7FFFFFFC,tl,tl);
+    #ifdef HOST_IMM_ADDR32
+    if(c) emit_readdword_tlb(constmap[i][s]+offset,map,th,tl);
+    else
+    #endif
+    emit_readdword_indexed_tlb(0,offset||c||s<0?tl:s,map,th,tl);
+    type=LOADD_STUB;
+  }
+  if (opcode[i]==0x39) { // SWC1
+    //emit_writeword_indexed(tl,(intptr_t)g_rdram-0x80000000,temp);
+    emit_writeword_indexed_tlb(tl,0,offset||c||s<0?temp:s,map,temp);
+    type=STOREW_STUB;
+  }
+  if (opcode[i]==0x3D) { // SDC1
+    assert(th>=0);
+    //emit_writeword_indexed(th,(intptr_t)g_rdram-0x80000000,temp);
+    //emit_writeword_indexed(tl,(intptr_t)g_rdram-0x7FFFFFFC,temp);
+    emit_writedword_indexed_tlb(th,tl,0,offset||c||s<0?temp:s,map,temp);
+    type=STORED_STUB;
+  }
+  if(!using_tlb) {
+    if (opcode[i]==0x39||opcode[i]==0x3D) { // SWC1/SDC1
+      #ifndef DESTRUCTIVE_SHIFT
+      temp=offset||c||s<0?ar:s;
+      #endif
+      #if defined(HOST_IMM8)
+      int ir=get_reg(i_regs->regmap,INVCP);
+      assert(ir>=0);
+      emit_cmpmem_indexedsr12_reg(ir,temp,1);
+      #else
+      emit_cmpmem_indexedsr12_imm((intptr_t)invalid_code,temp,1);
+      #endif
+      #if defined(HAVE_CONDITIONAL_CALL) && !defined(DESTRUCTIVE_SHIFT)
+      emit_callne(invalidate_addr_reg[temp]);
+      #else
+      jaddr3=(intptr_t)out;
+      emit_jne(0);
+      add_stub(INVCODE_STUB,jaddr3,(intptr_t)out,reglist|(1<<HOST_CCREG),temp,0,0,0);
+      #endif
+    }
+  }
+  if(jaddr2) add_stub(type,jaddr2,(intptr_t)out,i,offset||c||s<0?ar:s,(intptr_t)i_regs,ccadj[i],reglist);
+  if (opcode[i]==0x31) { // LWC1 (write float)
+    emit_writeword_indexed(tl,0,temp);
+  }
+  if (opcode[i]==0x35) { // LDC1 (write double)
+    emit_writeword_indexed(th,4,temp);
+    emit_writeword_indexed(tl,0,temp);
+  }
+  //if(opcode[i]==0x39)
+  /*if(opcode[i]==0x39||opcode[i]==0x31)
+  {
+    emit_pusha();
+        emit_readword((intptr_t)&last_count,ECX);
+        if(get_reg(i_regs->regmap,CCREG)<0)
+          emit_loadreg(CCREG,HOST_CCREG);
+        emit_add(HOST_CCREG,ECX,HOST_CCREG);
+        emit_addimm(HOST_CCREG,2*ccadj[i],HOST_CCREG);
+        emit_writeword(HOST_CCREG,(intptr_t)&g_cp0_regs[CP0_COUNT_REG]);
+    emit_call((intptr_t)memdebug);
+    emit_popa();
+  }*/
+}
+#define c1ls_assemble c1ls_assemble_arm64
+
 static void fconv_assemble_arm64(int i,struct regstat *i_regs)
 {
   signed char temp=get_reg(i_regs->regmap,-1);
@@ -4936,53 +5140,53 @@ static void fconv_assemble_arm64(int i,struct regstat *i_regs)
   //TOBEDONE
   #if (defined(__VFP_FP__) && !defined(__SOFTFP__)) 
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0d) { // trunc_w_s
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
     emit_flds(temp,15);
     emit_ftosizs(15,15); // float->int, truncate
     if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
-      emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+      emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
     emit_fsts(15,temp);
     return;
   }
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0d) { // trunc_w_d
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
     emit_vldr(temp,7);
     emit_ftosizd(7,13); // double->int, truncate
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
     emit_fsts(13,temp);
     return;
   }
   
   if(opcode2[i]==0x14&&(source[i]&0x3f)==0x20) { // cvt_s_w
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
     emit_flds(temp,13);
     if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
-      emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+      emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
     emit_fsitos(13,15);
     emit_fsts(15,temp);
     return;
   }
   if(opcode2[i]==0x14&&(source[i]&0x3f)==0x21) { // cvt_d_w
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
     emit_flds(temp,13);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
     emit_fsitod(13,7);
     emit_vstr(7,temp);
     return;
   }
   
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x21) { // cvt_d_s
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
     emit_flds(temp,13);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
     emit_fcvtds(13,7);
     emit_vstr(7,temp);
     return;
   }
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x20) { // cvt_s_d
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
     emit_vldr(temp,7);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
     emit_fcvtsd(7,13);
     emit_fsts(13,temp);
     return;
@@ -4998,137 +5202,137 @@ static void fconv_assemble_arm64(int i,struct regstat *i_regs)
   save_regs(reglist);
   
   if(opcode2[i]==0x14&&(source[i]&0x3f)==0x20) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)cvt_s_w);
   }
   if(opcode2[i]==0x14&&(source[i]&0x3f)==0x21) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)cvt_d_w);
   }
   if(opcode2[i]==0x15&&(source[i]&0x3f)==0x20) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)cvt_s_l);
   }
   if(opcode2[i]==0x15&&(source[i]&0x3f)==0x21) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)cvt_d_l);
   }
   
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x21) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)cvt_d_s);
   }
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x24) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)cvt_w_s);
   }
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x25) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)cvt_l_s);
   }
   
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x20) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)cvt_s_d);
   }
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x24) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)cvt_w_d);
   }
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x25) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)cvt_l_d);
   }
   
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x08) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)round_l_s);
   }
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x09) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)trunc_l_s);
   }
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0a) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)ceil_l_s);
   }
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0b) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)floor_l_s);
   }
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0c) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)round_w_s);
   }
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0d) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)trunc_w_s);
   }
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0e) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)ceil_w_s);
   }
   if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0f) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)floor_w_s);
   }
   
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x08) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)round_l_d);
   }
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x09) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)trunc_l_d);
   }
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0a) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)ceil_l_d);
   }
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0b) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)floor_l_d);
   }
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0c) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)round_w_d);
   }
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0d) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)trunc_w_d);
   }
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0e) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)ceil_w_d);
   }
   if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0f) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     emit_call((intptr_t)floor_w_d);
   }
   
@@ -5166,8 +5370,8 @@ static void fcomp_assemble(int i,struct regstat *i_regs)
   //TOBEDONE
   #if (defined(__VFP_FP__) && !defined(__SOFTFP__)) 
   if(opcode2[i]==0x10) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>16)&0x1f],HOST_TEMPREG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>16)&0x1f],HOST_TEMPREG);
     emit_orimm(fs,0x800000,fs);
     emit_flds(temp,14);
     emit_flds(HOST_TEMPREG,15);
@@ -5189,8 +5393,8 @@ static void fcomp_assemble(int i,struct regstat *i_regs)
     return;
   }
   if(opcode2[i]==0x11) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>16)&0x1f],HOST_TEMPREG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>16)&0x1f],HOST_TEMPREG);
     emit_orimm(fs,0x800000,fs);
     emit_vldr(temp,6);
     emit_vldr(HOST_TEMPREG,7);
@@ -5222,8 +5426,8 @@ static void fcomp_assemble(int i,struct regstat *i_regs)
   reglist&=~(1<<fs);
   save_regs(reglist);
   if(opcode2[i]==0x10) {
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>16)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>16)&0x1f],ARG2_REG);
     if((source[i]&0x3f)==0x30) emit_call((intptr_t)c_f_s);
     if((source[i]&0x3f)==0x31) emit_call((intptr_t)c_un_s);
     if((source[i]&0x3f)==0x32) emit_call((intptr_t)c_eq_s);
@@ -5242,8 +5446,8 @@ static void fcomp_assemble(int i,struct regstat *i_regs)
     if((source[i]&0x3f)==0x3f) emit_call((intptr_t)c_ngt_s);
   }
   if(opcode2[i]==0x11) {
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>16)&0x1f],ARG2_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>16)&0x1f],ARG2_REG);
     if((source[i]&0x3f)==0x30) emit_call((intptr_t)c_f_d);
     if((source[i]&0x3f)==0x31) emit_call((intptr_t)c_un_d);
     if((source[i]&0x3f)==0x32) emit_call((intptr_t)c_eq_d);
@@ -5286,14 +5490,14 @@ static void float_assemble(int i,struct regstat *i_regs)
   {
     if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
       if(opcode2[i]==0x10) {
-        emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
-        emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],HOST_TEMPREG);
+        emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+        emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],HOST_TEMPREG);
         emit_readword_indexed(0,temp,temp);
         emit_writeword_indexed(temp,0,HOST_TEMPREG);
       }
       if(opcode2[i]==0x11) {
-        emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
-        emit_readword((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],HOST_TEMPREG);
+        emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+        emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],HOST_TEMPREG);
         emit_vldr(temp,7);
         emit_vstr(7,HOST_TEMPREG);
       }
@@ -5304,10 +5508,10 @@ static void float_assemble(int i,struct regstat *i_regs)
   if((source[i]&0x3f)>3)
   {
     if(opcode2[i]==0x10) {
-      emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+      emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
       emit_flds(temp,15);
       if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
-        emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+        emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
       }
       if((source[i]&0x3f)==4) // sqrt
         emit_fsqrts(15,15);
@@ -5318,10 +5522,10 @@ static void float_assemble(int i,struct regstat *i_regs)
       emit_fsts(15,temp);
     }
     if(opcode2[i]==0x11) {
-      emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+      emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
       emit_vldr(temp,7);
       if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
-        emit_readword((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+        emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
       }
       if((source[i]&0x3f)==4) // sqrt
         emit_fsqrtd(7,7);
@@ -5336,19 +5540,19 @@ static void float_assemble(int i,struct regstat *i_regs)
   if((source[i]&0x3f)<4)
   {
     if(opcode2[i]==0x10) {
-      emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+      emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
     }
     if(opcode2[i]==0x11) {
-      emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+      emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
     }
     if(((source[i]>>11)&0x1f)!=((source[i]>>16)&0x1f)) {
       if(opcode2[i]==0x10) {
-        emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>16)&0x1f],HOST_TEMPREG);
+        emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>16)&0x1f],HOST_TEMPREG);
         emit_flds(temp,15);
         emit_flds(HOST_TEMPREG,13);
         if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
           if(((source[i]>>16)&0x1f)!=((source[i]>>6)&0x1f)) {
-            emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+            emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
           }
         }
         if((source[i]&0x3f)==0) emit_fadds(15,13,15);
@@ -5362,12 +5566,12 @@ static void float_assemble(int i,struct regstat *i_regs)
         }
       }
       else if(opcode2[i]==0x11) {
-        emit_readword((intptr_t)&reg_cop1_double[(source[i]>>16)&0x1f],HOST_TEMPREG);
+        emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>16)&0x1f],HOST_TEMPREG);
         emit_vldr(temp,7);
         emit_vldr(HOST_TEMPREG,6);
         if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
           if(((source[i]>>16)&0x1f)!=((source[i]>>6)&0x1f)) {
-            emit_readword((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+            emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
           }
         }
         if((source[i]&0x3f)==0) emit_faddd(7,6,7);
@@ -5385,7 +5589,7 @@ static void float_assemble(int i,struct regstat *i_regs)
       if(opcode2[i]==0x10) {
         emit_flds(temp,15);
         if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
-          emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+          emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
         }
         if((source[i]&0x3f)==0) emit_fadds(15,15,15);
         if((source[i]&0x3f)==1) emit_fsubs(15,15,15);
@@ -5396,7 +5600,7 @@ static void float_assemble(int i,struct regstat *i_regs)
       else if(opcode2[i]==0x11) {
         emit_vldr(temp,7);
         if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
-          emit_readword((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+          emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
         }
         if((source[i]&0x3f)==0) emit_faddd(7,7,7);
         if((source[i]&0x3f)==1) emit_fsubd(7,7,7);
@@ -5415,12 +5619,12 @@ static void float_assemble(int i,struct regstat *i_regs)
   }
   if(opcode2[i]==0x10) { // Single precision
     save_regs(reglist);
-    emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],ARG1_REG);
     if((source[i]&0x3f)<4) {
-      emit_readword((intptr_t)&reg_cop1_simple[(source[i]>>16)&0x1f],ARG2_REG);
-      emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG3_REG);
+      emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>16)&0x1f],ARG2_REG);
+      emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG3_REG);
     }else{
-      emit_readword((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
+      emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>> 6)&0x1f],ARG2_REG);
     }
     switch(source[i]&0x3f)
     {
@@ -5437,12 +5641,12 @@ static void float_assemble(int i,struct regstat *i_regs)
   }
   if(opcode2[i]==0x11) { // Double precision
     save_regs(reglist);
-    emit_readword((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],ARG1_REG);
     if((source[i]&0x3f)<4) {
-      emit_readword((intptr_t)&reg_cop1_double[(source[i]>>16)&0x1f],ARG2_REG);
-      emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG3_REG);
+      emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>16)&0x1f],ARG2_REG);
+      emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG3_REG);
     }else{
-      emit_readword((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
+      emit_readword64((intptr_t)&reg_cop1_double[(source[i]>> 6)&0x1f],ARG2_REG);
     }
     switch(source[i]&0x3f)
     {
