@@ -393,7 +393,14 @@ GLOBAL_FUNCTION(cc_interrupt):
     b      .E1
     
 GLOBAL_FUNCTION(do_interrupt):
-    brk 0
+    ldr    w0, [x29, #pcaddr-dynarec_local]
+    bl     get_addr_ht
+    ldr    w1, [x29, #next_interupt-dynarec_local]
+    ldr    w20, [x29, #g_cp0_regs+36-dynarec_local] /* Count */
+    str    w1, [x29, #last_count-dynarec_local]
+    sub    w20, w20, w1
+    add    w20, w20, #2
+    br     x0
     
 GLOBAL_FUNCTION(fp_exception):
     brk 0
