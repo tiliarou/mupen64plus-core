@@ -324,7 +324,7 @@ static void print_debug_info(u_int vaddr)
   int fpr_sum = fpr_checksum();
   int cop0_sum = cop0_checksum();
   fprintf(pDebugFile, "target addr:%.8x\n",vaddr);
-  fprintf(pDebugFile, "rdram checksum:%x\n",rdram_checksum());
+  //fprintf(pDebugFile, "rdram checksum:%x\n",rdram_checksum());
   fprintf(pDebugFile, "gpr checksum:%x\n",gpr_sum);
   fprintf(pDebugFile, "fpr checksum:%x\n",fpr_sum);
   fprintf(pDebugFile, "cop0_checksum:%x\n",cop0_sum);
@@ -344,6 +344,7 @@ static void print_debug_info(u_int vaddr)
   fprintf(pDebugFile, "hi:%.8x%.8x, lo:%.8x%.8x\n",(int)(hi>>32),(int)hi,(int)(lo>>32),(int)lo);
   fprintf(pDebugFile, "FCR31:%.8x, FCR0:%.8x\n",FCR31,FCR0);
   fprintf(pDebugFile, "count:%.8x, next:%.8x\n\n",g_cp0_regs[CP0_COUNT_REG],next_interupt);
+  fflush(pDebugFile);
 }
 #endif
 

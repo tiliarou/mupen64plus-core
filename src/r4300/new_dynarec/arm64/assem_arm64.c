@@ -2647,49 +2647,38 @@ static void emit_movsbl_indexed(int offset, int rs, int rt)
 }
 static void emit_movsbl_indexed_tlb(int addr, int rs, int map, int rt)
 {
-  assert(0);
-  assert(rs!=29);
-  assert(map!=29);
-  assert(rt!=29);
+  assert(rt!=29&&rt!=HOST_TEMPREG);
+  assert(rs!=29&&rt!=HOST_TEMPREG);
+  assert(map!=29&&rt!=HOST_TEMPREG);
   if(map<0) emit_movsbl_indexed(addr, rs, rt);
   else {
     if(addr==0) {
-      emit_shlimm(map,2,HOST_TEMPREG);
-      assem_debug("ldrsb %s,%s+%s",regname[rt],regname[rs],regname[HOST_TEMPREG]);
-      output_w32(0xe19000d0|rd_rn_rm(rt,rs,HOST_TEMPREG));
+      emit_shlimm64(map,2,HOST_TEMPREG);
+      assem_debug("ldrsb %s,[%s,%s]",regname[rt],regname64[rs],regname64[HOST_TEMPREG]);
+      output_w32(0x38a06800|HOST_TEMPREG<<16|rs<<5|rt);
     }else{
-      assert(addr>-256&&addr<256);
-      assem_debug("add %s,%s,%s,lsl #2",regname[rt],regname[rs],regname[map]);
-      output_w32(0xe0800000|rd_rn_rm(rt,rs,map)|(2<<7));
-      emit_movsbl_indexed(addr, rt, rt);
+      emit_addimm(rs,addr,rt);
+      emit_shlimm64(map,2,HOST_TEMPREG);
+      assem_debug("ldrsb %s,[%s,%s]",regname[rt],regname64[rt],regname64[HOST_TEMPREG]);
+      output_w32(0x38a06800|HOST_TEMPREG<<16|rt<<5|rt);
     }
   }
 }
 static void emit_movswl_indexed(int offset, int rs, int rt)
 {
-  assert(0);
   assert(rs!=29);
   assert(rt!=29);
   assert(offset>-256&&offset<256);
-  assem_debug("ldrsh %s,%s+%d",regname[rt],regname[rs],offset);
-  if(offset>=0) {
-    output_w32(0xe1d000f0|rd_rn_rm(rt,rs,0)|((offset<<4)&0xf00)|(offset&0xf));
-  }else{
-    output_w32(0xe15000f0|rd_rn_rm(rt,rs,0)|(((-offset)<<4)&0xf00)|((-offset)&0xf));
-  }
+  assem_debug("ldursh %s,%s+%d",regname[rt],regname64[rs],offset);
+  output_w32(0x78800000|((u_int)offset&0x1ff)<<12|rs<<5|rt);
 }
 static void emit_movzbl_indexed(int offset, int rs, int rt)
 {
-  assert(0);
   assert(rs!=29);
   assert(rt!=29);
-  assert(offset>-4096&&offset<4096);
-  assem_debug("ldrb %s,%s+%d",regname[rt],regname[rs],offset);
-  if(offset>=0) {
-    output_w32(0xe5d00000|rd_rn_rm(rt,rs,0)|offset);
-  }else{
-    output_w32(0xe5500000|rd_rn_rm(rt,rs,0)|(-offset));
-  }
+  assert(offset>-256&&offset<256);
+  assem_debug("ldurb %s,%s+%d",regname[rt],regname64[rs],offset);
+  output_w32(0x38400000|((u_int)offset&0x1ff)<<12|rs<<5|rt);
 }
 static void emit_movzbl_dualindexedx4(int rs1, int rs2, int rt)
 {
@@ -2738,21 +2727,20 @@ static void emit_readword(intptr_t addr, int rt)
 }
 static void emit_movsbl(int addr, int rt)
 {
-  assert(0);
   assert(rt!=29);
   u_int offset = addr-(uintptr_t)&dynarec_local;
-  assert(offset<256);
+  assert(offset<4096);
   assem_debug("ldrsb %s,fp+%d",regname[rt],offset);
-  output_w32(0xe1d000d0|rd_rn_rm(rt,FP,0)|((offset<<4)&0xf00)|(offset&0xf));
+  output_w32(0x39800000|offset<<10|FP<<5|rt);
 }
 static void emit_movswl(int addr, int rt)
 {
-  assert(0);
   assert(rt!=29);
   u_int offset = addr-(uintptr_t)&dynarec_local;
-  assert(offset<256);
+  assert(offset<8190);
+  assert(offset%2 == 0); /* 2 bytes aligned */
   assem_debug("ldrsh %s,fp+%d",regname[rt],offset);
-  output_w32(0xe1d000f0|rd_rn_rm(rt,FP,0)|((offset<<4)&0xf00)|(offset&0xf));
+  output_w32(0x79800000|((offset>>1)<<10)|(FP<<5)|rt);
 }
 static void emit_movzbl(intptr_t addr, int rt)
 {
