@@ -1366,18 +1366,18 @@ static u_int gencondjmp(uintptr_t addr)
 uint32_t count_trailing_zeros(uint64_t value)
 {
 #ifdef _MSC_VER
-  uint32_t trailing_zero = 0;
-#ifdef _M_X64
-  if (_BitScanForward64(&trailing_zero,value))
-    return trailing_zero;
+  uint32_t trailing_zero_low = 0;
+  uint32_t trailing_zero_high = 0;
+  if(!_BitScanForward(&trailing_zero_low, (uint32_t)value))
+    trailing_zero_low = 32;
+
+  if(!_BitScanForward(&trailing_zero_high, (uint32_t)(value>>32)))
+    trailing_zero_high = 32;
+
+  if(trailing_zero_low == 32)
+    return trailing_zero_low + trailing_zero_high;
   else
-    return 64;
-#else
-  if (_BitScanForward(&trailing_zero,(uint32_t)value))
-    return trailing_zero;
-  else
-    return 32;
-#endif
+    return trailing_zero_low;
 #else /* ARM64 */
   return __builtin_ctzll(value);
 #endif
@@ -1386,18 +1386,18 @@ uint32_t count_trailing_zeros(uint64_t value)
 uint32_t count_leading_zeros(uint64_t value)
 {
 #ifdef _MSC_VER
-  uint32_t leading_zero = 0;
-#ifdef _M_X64
-  if (_BitScanReverse64(&leading_zero,value))
-     return 63 - leading_zero;
+  uint32_t leading_zero_low = 0;
+  uint32_t leading_zero_high = 0;
+  if(!_BitScanReverse(&leading_zero_low, (uint32_t)value))
+    leading_zero_low = 32;
+
+  if(!_BitScanReverse(&leading_zero_high, (uint32_t)(value>>32)))
+    leading_zero_high = 32;
+
+  if(leading_zero_high == 32)
+    return leading_zero_low + leading_zero_high;
   else
-    return 64;
-#else
-  if (_BitScanReverse(&leading_zero,(uint32_t)value))
-     return 31 - leading_zero;
-  else
-    return 32;
-#endif
+    return leading_zero_high;
 #else /* ARM64 */
   return __builtin_clzll(value);
 #endif
@@ -2131,13 +2131,12 @@ static void emit_sarimm(int rs,u_int imm,int rt)
 
 static void emit_rorimm(int rs,u_int imm,int rt)
 {
-  assert(0);
   assert(rs!=29);
   assert(rt!=29);
   assert(imm>0);
   assert(imm<32);
   assem_debug("ror %s,%s,#%d",regname[rt],regname[rs],imm);
-  output_w32(0xe1a00000|rd_rn_rm(rt,0,rs)|0x60|(imm<<7));
+  output_w32(0x13800000|rs<<16|imm<<10|rs<<5|rt);
 }
 
 static void emit_shldimm(int rs,int rs2,u_int imm,int rt)
@@ -2374,7 +2373,6 @@ static void emit_slti64_32(int rsh,int rsl,int imm,int rt)
 }
 static void emit_sltiu64_32(int rsh,int rsl,int imm,int rt)
 {
-  assert(0);
   assert(rsh!=29);
   assert(rsl!=29);
   assert(rt!=29);
@@ -2433,12 +2431,12 @@ static void emit_set_gz64_32(int rsh, int rsl, int rt)
 }
 static void emit_set_nz64_32(int rsh, int rsl, int rt)
 {
-  assert(0);
   assert(rsh!=29);
   assert(rsl!=29);
   assert(rt!=29);
   //assem_debug("set_nz64");
-  emit_or_and_set_flags(rsh,rsl,rt);
+  emit_or(rsh,rsl,rt);
+  emit_test(rt,rt);
   emit_cmovne_imm(1,rt);
 }
 static void emit_set_if_less32(int rs1, int rs2, int rt)
@@ -6057,7 +6055,6 @@ static void multdiv_assemble_arm64(int i,struct regstat *i_regs)
       }
       if(opcode2[i]==0x1B) // DIVU
       {
-        assert(0);
         signed char numerator=get_reg(i_regs->regmap,rs1[i]);
         signed char denominator=get_reg(i_regs->regmap,rs2[i]);
         assert(numerator>=0);

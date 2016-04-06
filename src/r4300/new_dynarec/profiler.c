@@ -282,8 +282,8 @@ static csh handle;
 
 void profiler_init(void)
 {
-  if(cs_open(ARCHITECTURE, MODE, &handle) != CS_ERR_OK) return;
-  cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
+  //if(cs_open(ARCHITECTURE, MODE, &handle) != CS_ERR_OK) return;
+  //cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
   base_addr = extra_memory;
   new_dynarec_init();
 
@@ -295,8 +295,8 @@ void profiler_init(void)
 
 void profiler_cleanup(void)
 {
-  if(handle == 0) return;
   new_dynarec_cleanup();
+  if(handle == 0) return;
   cs_close(&handle);
 }
 
@@ -310,14 +310,14 @@ void profiler_block(int addr)
   int32_t sum = 0;
   char filename[16];
 
-  if(handle == 0) return;
-
-  sprintf(filename, "%.8x.txt", addr);
-  pFile = fopen (filename,"w");
   beginning=(uint32_t *)out;
   new_recompile_block(addr);
   end=(uint32_t *)out;
 
+  if(handle == 0) return;
+
+  sprintf(filename, "%.8x.txt", addr);
+  pFile = fopen (filename,"w");
   size = (intptr_t)end - (intptr_t)beginning;
   size = (size < 0) ? (-size) : size;
 
