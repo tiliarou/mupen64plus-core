@@ -2902,7 +2902,6 @@ static void load_assemble(int i,struct regstat *i_regs)
       }
     }
   }else{ // using tlb
-    assert(0); //TOBEDONE
     int x=0;
     if (opcode[i]==0x20||opcode[i]==0x24) x=3; // LB/LBU
     if (opcode[i]==0x21||opcode[i]==0x25) x=2; // LH/LHU
@@ -3924,9 +3923,6 @@ static void wb_invalidate(signed char pre[],signed char entry[],uint64_t dirty,u
         if(pre[hr]>=0&&(pre[hr]&63)<TEMPREG) {
           int nr;
           if((nr=get_reg(entry,pre[hr]))>=0) {
-            assert(pre[hr]!=INVCP);
-            assert(pre[hr]!=MMREG);
-            assert(pre[hr]!=ROREG);
             emit_mov(hr,nr);
           }
         }

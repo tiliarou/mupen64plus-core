@@ -1481,6 +1481,14 @@ static void emit_mov(int rs,int rt)
   output_w32(0x2a000000|rs<<16|WZR<<5|rt);
 }
 
+static void emit_mov64(int rs,int rt)
+{
+  assert(rs!=29);
+  assert(rt!=29);
+  assem_debug("mov %s,%s",regname64[rt],regname64[rs]);
+  output_w32(0xaa000000|rs<<16|WZR<<5|rt);
+}
+
 static void emit_movs(int rs,int rt)
 {
   assert(0);
@@ -1831,11 +1839,10 @@ static void emit_testimm64(int rs,int imm)
 
 static void emit_not(int rs,int rt)
 {
-  assert(0);
   assert(rs!=29);
   assert(rt!=29);
   assem_debug("mvn %s,%s",regname[rt],regname[rs]);
-  output_w32(0xe1e00000|rd_rn_rm(rt,0,rs));
+  output_w32(0x2a200000|rs<<16|WZR<<5|rt);
 }
 
 static void emit_and(u_int rs1,u_int rs2,u_int rt)
@@ -2409,12 +2416,11 @@ static void emit_set_gz32(int rs, int rt)
 }
 static void emit_set_nz32(int rs, int rt)
 {
-  assert(0);
   assert(rs!=29);
   assert(rt!=29);
   //assem_debug("set_nz32");
-  if(rs!=rt) emit_movs(rs,rt);
-  else emit_test(rs,rs);
+  if(rs!=rt) emit_mov(rs,rt);
+  emit_test(rs,rs);
   emit_cmovne_imm(1,rt);
 }
 static void emit_set_gz64_32(int rsh, int rsl, int rt)
@@ -6300,6 +6306,53 @@ static void wb_valid(signed char pre[],signed char entry[],u_int dirty_pre,u_int
   }
 }
 
+static void wb_invalidate_arm64(signed char pre[],signed char entry[],uint64_t dirty,uint64_t is32,
+  uint64_t u,uint64_t uu)
+{
+  int hr;
+  for(hr=0;hr<HOST_REGS;hr++) {
+    if(hr!=EXCLUDE_REG) {
+      if(pre[hr]!=entry[hr]) {
+        if(pre[hr]>=0) {
+          if((dirty>>hr)&1) {
+            if(get_reg(entry,pre[hr])<0) {
+              if(pre[hr]<64) {
+                if(!((u>>pre[hr])&1)) {
+                  emit_storereg(pre[hr],hr);
+                  if( ((is32>>pre[hr])&1) && !((uu>>pre[hr])&1) ) {
+                    emit_sarimm(hr,31,hr);
+                    emit_storereg(pre[hr]|64,hr);
+                  }
+                }
+              }else{
+                if(!((uu>>(pre[hr]&63))&1) && !((is32>>(pre[hr]&63))&1)) {
+                  emit_storereg(pre[hr],hr);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  // Move from one register to another (no writeback)
+  for(hr=0;hr<HOST_REGS;hr++) {
+    if(hr!=EXCLUDE_REG) {
+      if(pre[hr]!=entry[hr]) {
+        if(pre[hr]>=0&&(pre[hr]&63)<TEMPREG) {
+          int nr;
+          if((nr=get_reg(entry,pre[hr]))>=0) {
+            if((pre[hr]!=INVCP)&&(pre[hr]!=MMREG)&&(pre[hr]!=ROREG))
+              emit_mov(hr,nr);
+            else
+              emit_mov64(hr,nr);
+          }
+        }
+      }
+    }
+  }
+}
+#define wb_invalidate wb_invalidate_arm64
 
 /* using strd could possibly help but you'd have to allocate registers in pairs
 static void wb_invalidate_arm64(signed char pre[],signed char entry[],uint64_t dirty,uint64_t is32,uint64_t u,uint64_t uu)
