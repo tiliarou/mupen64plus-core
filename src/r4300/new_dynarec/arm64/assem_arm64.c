@@ -2406,7 +2406,6 @@ static void emit_cmp(int rs,int rt)
 }
 static void emit_set_gz32(int rs, int rt)
 {
-  assert(0);
   assert(rs!=29);
   assert(rt!=29);
   //assem_debug("set_gz32");

@@ -347,9 +347,9 @@ GLOBAL_FUNCTION(cc_interrupt):
     and    w1, w1, w0 
     add    x0, x29, #restore_candidate-dynarec_local
     str    w20, [x29, #g_cp0_regs+36-dynarec_local] /* Count */
-    ldr    w2, [x1, x0]
+    ldr    w22, [x1, x0]
     mov    x20, x30 /* Save link register */
-    tst    w2, w2
+    tst    w22, w22
     b.ne   .E4
 .E1:
     bl     gen_interupt
@@ -380,18 +380,17 @@ GLOBAL_FUNCTION(cc_interrupt):
 .E4:
     /* Move 'dirty' blocks to the 'clean' list */
     str    wzr, [x1, x0]
-    lsl    w1, w1, #3
-    mov    w3, #0
+    lsl    w21, w1, #3
+    mov    w23, #0
 .E5:
-    and    w0, w2, #1
-    tst    w0, w0
-    add    w0, w1, w3
-    b.ne   .E6
+    tst    w22, #1
+    b.eq   .E6
+    add    w0, w21, w23
     bl     clean_blocks
 .E6:
-    lsr    w2, w2, #1
-    add    w3, w3, #1
-    tst    w3, #31
+    lsr    w22, w22, #1
+    add    w23, w23, #1
+    tst    w23, #31
     b.ne   .E5
     b      .E1
     
