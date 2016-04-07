@@ -630,8 +630,5 @@ GLOBAL_FUNCTION(write_nomemd_new):
     
 GLOBAL_FUNCTION(breakpoint):
     brk 0
-    
-GLOBAL_FUNCTION(__clear_cache_bugfix):
-    nop
 
 END_SECTION

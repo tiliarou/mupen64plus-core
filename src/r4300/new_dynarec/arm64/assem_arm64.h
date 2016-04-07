@@ -127,12 +127,6 @@ void write_rdramh_new(void);
 void write_rdramd_new(void);
 void breakpoint(void);
 
-/* bug-fix to implement __clear_cache (missing in Android; http://code.google.com/p/android/issues/detail?id=1803) */
-void __clear_cache_bugfix(char* begin, char *end);
-#ifdef ANDROID
-  #define __clear_cache __clear_cache_bugfix
-#endif
-
 extern char *invc_ptr;
 extern char extra_memory[33554432];
 extern int cycle_count;
