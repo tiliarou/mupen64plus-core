@@ -377,6 +377,7 @@ GLOBAL_FUNCTION(cc_interrupt):
     ldp    x25,x26,[x16,#48]
     ldp    x27,x28,[x16,#64]
     ldp    x29,x30,[x16,#80]
+    ret
 .E4:
     /* Move 'dirty' blocks to the 'clean' list */
     str    wzr, [x1, x0]
