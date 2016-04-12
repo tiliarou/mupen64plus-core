@@ -3123,6 +3123,7 @@ static void loadlr_assemble(int i,struct regstat *i_regs)
 }
 #endif
 
+#ifndef store_assemble
 static void store_assemble(int i,struct regstat *i_regs)
 {
   int s,th,tl,map=-1,cache=-1;
@@ -3184,7 +3185,6 @@ static void store_assemble(int i,struct regstat *i_regs)
       }
     }
   }else{ // using tlb
-    assert(0); //TOBEDONE
     int x=0;
     if (opcode[i]==0x28) x=3; // SB
     if (opcode[i]==0x29) x=2; // SH
@@ -3219,9 +3219,6 @@ static void store_assemble(int i,struct regstat *i_regs)
         gen_tlb_addr_w(temp,map);
         emit_writehword_indexed(tl,x,temp);
       }else {
-        #if NEW_DYNAREC==NEW_DYNAREC_ARM64
-        assert(0);
-        #endif
         emit_writehword_indexed(tl,(intptr_t)g_rdram-0x80000000+x,temp);
       }
     }
@@ -3319,6 +3316,7 @@ static void store_assemble(int i,struct regstat *i_regs)
   }
 */
 }
+#endif
 
 #ifndef storelr_assemble
 static void storelr_assemble(int i,struct regstat *i_regs)
@@ -11147,6 +11145,9 @@ void TLBWI_new(void)
         }
         if(!using_tlb) DebugMessage(M64MSG_VERBOSE, "Enabled TLB");
         // Tell the dynamic recompiler to generate tlb lookup code
+        #if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
+        set_tlb();
+        #endif
         using_tlb=1;
       }
       else memory_map[i]=-1;
@@ -11168,6 +11169,9 @@ void TLBWI_new(void)
         }
         if(!using_tlb) DebugMessage(M64MSG_VERBOSE, "Enabled TLB");
         // Tell the dynamic recompiler to generate tlb lookup code
+        #if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
+        set_tlb();
+        #endif
         using_tlb=1;
       }
       else memory_map[i]=-1;
@@ -11219,6 +11223,9 @@ void TLBWR_new(void)
         }
         if(!using_tlb) DebugMessage(M64MSG_VERBOSE, "Enabled TLB");
         // Tell the dynamic recompiler to generate tlb lookup code
+        #if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
+        set_tlb();
+        #endif
         using_tlb=1;
       }
       else memory_map[i]=-1;
@@ -11240,6 +11247,9 @@ void TLBWR_new(void)
         }
         if(!using_tlb) DebugMessage(M64MSG_VERBOSE, "Enabled TLB");
         // Tell the dynamic recompiler to generate tlb lookup code
+        #if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
+        set_tlb();
+        #endif
         using_tlb=1;
       }
       else memory_map[i]=-1;

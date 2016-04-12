@@ -408,4 +408,9 @@ void profiler_block(int addr)
   }*/
 }
 
+void set_tlb(void)
+{
+  using_tlb = 1;
+}
+
 #endif

@@ -11089,6 +11089,9 @@ void TLBWI_new(void)
         }
         if(!using_tlb) DebugMessage(M64MSG_VERBOSE, "Enabled TLB");
         // Tell the dynamic recompiler to generate tlb lookup code
+        #if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
+        set_tlb();
+        #endif
         using_tlb=1;
       }
       else memory_map[i]=-1;
@@ -11110,6 +11113,9 @@ void TLBWI_new(void)
         }
         if(!using_tlb) DebugMessage(M64MSG_VERBOSE, "Enabled TLB");
         // Tell the dynamic recompiler to generate tlb lookup code
+        #if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
+        set_tlb();
+        #endif
         using_tlb=1;
       }
       else memory_map[i]=-1;
@@ -11161,6 +11167,9 @@ void TLBWR_new(void)
         }
         if(!using_tlb) DebugMessage(M64MSG_VERBOSE, "Enabled TLB");
         // Tell the dynamic recompiler to generate tlb lookup code
+        #if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
+        set_tlb();
+        #endif
         using_tlb=1;
       }
       else memory_map[i]=-1;
@@ -11182,6 +11191,9 @@ void TLBWR_new(void)
         }
         if(!using_tlb) DebugMessage(M64MSG_VERBOSE, "Enabled TLB");
         // Tell the dynamic recompiler to generate tlb lookup code
+        #if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
+        set_tlb();
+        #endif
         using_tlb=1;
       }
       else memory_map[i]=-1;

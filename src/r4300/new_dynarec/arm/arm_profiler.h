@@ -26,6 +26,7 @@
 void profiler_init(void);
 void profiler_cleanup(void);
 void profiler_block(int addr);
+void set_tlb(void);
 #else
 
 #include <capstone.h>
