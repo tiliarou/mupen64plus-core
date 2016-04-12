@@ -1835,7 +1835,7 @@ static void emit_testimm(int rs,int imm)
   output_w32(0x72000000|armval<<10|rs<<5|WZR);
 }
 
-static void emit_testimm64(int rs,int imm)
+static void emit_testimm64(int rs,int64_t imm)
 {
   assert(rs!=29);
   u_int armval, ret;

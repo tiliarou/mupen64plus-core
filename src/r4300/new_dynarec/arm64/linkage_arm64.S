@@ -608,7 +608,19 @@ GLOBAL_FUNCTION(read_nomem_new):
     brk 0
     
 GLOBAL_FUNCTION(read_nomemb_new):
-    brk 0
+    /* w3 = instr addr/flags */
+    ldr    w2, [x29, #address-dynarec_local]
+    add    x4, x29, #memory_map-dynarec_local
+    lsr    w0, w2, #12
+    ldr    x4, [x4, x0, lsl #3]
+    mov    w1, #8
+    tst    x4, x4
+    b.mi   tlb_exception
+    eor    w2, w2, #3
+    lsl    x4, x4, #2
+    ldrb   w0, [x2, x4]
+    str    w0, [x29, #readmem_dword-dynarec_local]
+    ret
     
 GLOBAL_FUNCTION(read_nomemh_new):
     brk 0
