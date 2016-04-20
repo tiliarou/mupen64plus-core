@@ -638,7 +638,17 @@ LOCAL_FUNCTION(do_invalidate):
     ret
     
 GLOBAL_FUNCTION(read_nomem_new):
-    brk 0
+	/* w3 = instr addr/flags */
+    ldr    w2, [x29, #address-dynarec_local]
+    add    x4, x29, #memory_map-dynarec_local
+    lsr    w0, w2, #12
+    ldr    x4, [x4, x0, lsl #3]
+    mov    w1, #8
+    tst    x4, x4
+    b.mi   tlb_exception
+    ldr    w0, [x2, x4, lsl #2]
+    str    w0, [x29, #readmem_dword-dynarec_local]
+    ret
     
 GLOBAL_FUNCTION(read_nomemb_new):
     /* w3 = instr addr/flags */
@@ -656,10 +666,35 @@ GLOBAL_FUNCTION(read_nomemb_new):
     ret
     
 GLOBAL_FUNCTION(read_nomemh_new):
-    brk 0
+    /* w3 = instr addr/flags */
+    ldr    w2, [x29, #address-dynarec_local]
+    add    x4, x29, #memory_map-dynarec_local
+    lsr    w0, w2, #12
+    ldr    x4, [x4, x0, lsl #3]
+    mov    w1, #8
+    tst    x4, x4
+    b.mi   tlb_exception
+    lsl    x4, x4, #2
+    eor    w2, w2, #2
+    ldrh   w0, [x2, x4]
+    str    w0, [x29, #readmem_dword-dynarec_local]
+    ret
     
 GLOBAL_FUNCTION(read_nomemd_new):
-    brk 0
+    /* w3 = instr addr/flags */
+    ldr    w2, [x29, #address-dynarec_local]
+    add    x4, x29, #memory_map-dynarec_local
+    lsr    w0, w2, #12
+    ldr    x4, [x4, x0, lsl #3]
+    mov    w1, #8
+    tst    x4, x4
+    b.mi   tlb_exception
+	add    x4, x2, x4, lsl #2
+	ldr    w0, [x4]
+    ldr    w1, [x4, #4]
+    str    w0, [x29, #readmem_dword+4-dynarec_local]
+    str    w1, [x29, #readmem_dword-dynarec_local]
+    ret
     
 GLOBAL_FUNCTION(write_nomem_new):
     brk 0
@@ -672,6 +707,12 @@ GLOBAL_FUNCTION(write_nomemh_new):
     
 GLOBAL_FUNCTION(write_nomemd_new):
     brk 0
+
+LOCAL_FUNCTION(tlb_exception):
+    /* w1 = cause */
+    /* w2 = address */
+    /* w3 = instr addr/flags */
+	brk 0
     
 GLOBAL_FUNCTION(breakpoint):
     brk 0
