@@ -1345,9 +1345,13 @@ uint32_t count_leading_zeros(uint64_t value)
   uint32_t leading_zero_high = 0;
   if(!_BitScanReverse(&leading_zero_low, (uint32_t)value))
     leading_zero_low = 32;
+  else
+    leading_zero_low = 31 - leading_zero_low;
 
   if(!_BitScanReverse(&leading_zero_high, (uint32_t)(value>>32)))
     leading_zero_high = 32;
+  else
+    leading_zero_high = 31 - leading_zero_high;
 
   if(leading_zero_high == 32)
     return leading_zero_low + leading_zero_high;
@@ -2210,8 +2214,44 @@ static void emit_cmovs_reg(int rs,int rt)
 {
   assert(rs!=29);
   assert(rt!=29);
-  assem_debug("csel %s,%s,%s,lt",regname[rt],regname[rs],regname[rt]);
+  assem_debug("csel %s,%s,%s,mi",regname[rt],regname[rs],regname[rt]);
   output_w32(0x1a800000|rt<<16|MI<<12|rs<<5|rt);
+}
+
+static void emit_csel_vs(int rs1,int rs2,int rt)
+{
+  assert(rs1!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  assem_debug("csel %s,%s,%s,vs",regname[rt],regname[rs1],regname[rs2]);
+  output_w32(0x1a800000|rs2<<16|VS<<12|rs1<<5|rt);
+}
+
+static void emit_csel_eq(int rs1,int rs2,int rt)
+{
+  assert(rs1!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  assem_debug("csel %s,%s,%s,eq",regname[rt],regname[rs1],regname[rs2]);
+  output_w32(0x1a800000|rs2<<16|EQ<<12|rs1<<5|rt);
+}
+
+static void emit_csel_cc(int rs1,int rs2,int rt)
+{
+  assert(rs1!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  assem_debug("csel %s,%s,%s,cc",regname[rt],regname[rs1],regname[rs2]);
+  output_w32(0x1a800000|rs2<<16|CC<<12|rs1<<5|rt);
+}
+
+static void emit_csel_ls(int rs1,int rs2,int rt)
+{
+  assert(rs1!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  assem_debug("csel %s,%s,%s,ls",regname[rt],regname[rs1],regname[rs2]);
+  output_w32(0x1a800000|rs2<<16|LS<<12|rs1<<5|rt);
 }
 
 static void emit_slti32(int rs,int imm,int rt)
@@ -2494,6 +2534,15 @@ static void emit_readword_indexed(int offset, int rs, int rt)
   output_w32(0xb8400000|((u_int)offset&0x1ff)<<12|rs<<5|rt);
 }
 
+static void emit_readword_indexed64(int offset, int rs, int rt)
+{
+  assert(rs!=29);
+  assert(rt!=29);
+  assert(offset>-256&&offset<256);
+  assem_debug("ldur %s,%s+%d",regname64[rt],regname64[rs],offset);
+  output_w32(0xf8400000|((u_int)offset&0x1ff)<<12|rs<<5|rt);
+}
+
 static void emit_readword_dualindexedx4(int rs1, int rs2, int rt)
 {
   assert(rs1!=29);
@@ -2681,6 +2730,15 @@ static void emit_writeword_indexed(int rt, int offset, int rs)
   assert(offset>-256&&offset<256);
   assem_debug("stur %s,%s+%d",regname[rt],regname64[rs],offset);
   output_w32(0xb8000000|(((u_int)offset)&0x1ff)<<12|rs<<5|rt);
+}
+
+static void emit_writeword_indexed64(int rt, int offset, int rs)
+{
+  assert(rs!=29);
+  assert(rt!=29);
+  assert(offset>-256&&offset<256);
+  assem_debug("stur %s,%s+%d",regname64[rt],regname64[rs],offset);
+  output_w32(0xf8000000|(((u_int)offset)&0x1ff)<<12|rs<<5|rt);
 }
 
 static void emit_writeword_dualindexedx4(int rt, int rs1, int rs2)
@@ -3007,222 +3065,368 @@ static void emit_prefetchreg(int r)
 
 static void emit_flds(int r,int sr)
 {
-  //TOBEDONE
-  assert(0);
   assert(r!=29);
-  assem_debug("flds s%d,[%s]",sr,regname[r]);
-  output_w32(0xed900a00|((sr&14)<<11)|((sr&1)<<22)|(r<<16));
+  assert((sr==30)||(sr==31));
+  assem_debug("ldr s%d,[%s]",sr,regname[r]);
+  output_w32(0xbd400000|r<<5|sr);
 } 
 
-static void emit_vldr(int r,int vr)
+static void emit_fldd(int r,int dr)
 {
-  //TOBEDONE
-  assert(0);
   assert(r!=29);
-  assem_debug("vldr d%d,[%s]",vr,regname[r]);
-  output_w32(0xed900b00|(vr<<12)|(r<<16));
+  assert((dr==30)||(dr==31));
+  assem_debug("ldr d%d,[%s]",dr,regname[r]);
+  output_w32(0xfd400000|r<<5|dr);
 } 
 
 static void emit_fsts(int sr,int r)
 {
-  //TOBEDONE
-  assert(0);
   assert(r!=29);
-  assem_debug("fsts s%d,[%s]",sr,regname[r]);
-  output_w32(0xed800a00|((sr&14)<<11)|((sr&1)<<22)|(r<<16));
+  assert((sr==30)||(sr==31));
+  assem_debug("str s%d,[%s]",sr,regname[r]);
+  output_w32(0xbd000000|r<<5|sr);
 } 
 
-static void emit_vstr(int vr,int r)
+static void emit_fstd(int dr,int r)
 {
-  //TOBEDONE
-  assert(0);
   assert(r!=29);
-  assem_debug("vstr d%d,[%s]",vr,regname[r]);
-  output_w32(0xed800b00|(vr<<12)|(r<<16));
-} 
-
-static void emit_ftosizs(int s,int d)
-{
-  //TOBEDONE
-  assert(0);
-  assem_debug("ftosizs s%d,s%d",d,s);
-  output_w32(0xeebd0ac0|((d&14)<<11)|((d&1)<<22)|((s&14)>>1)|((s&1)<<5));
-} 
-
-static void emit_ftosizd(int s,int d)
-{
-  //TOBEDONE
-  assert(0);
-  assem_debug("ftosizd s%d,d%d",d,s);
-  output_w32(0xeebd0bc0|((d&14)<<11)|((d&1)<<22)|(s&7));
-} 
-
-static void emit_fsitos(int s,int d)
-{
-  //TOBEDONE
-  assert(0);
-  assem_debug("fsitos s%d,s%d",d,s);
-  output_w32(0xeeb80ac0|((d&14)<<11)|((d&1)<<22)|((s&14)>>1)|((s&1)<<5));
-} 
-
-static void emit_fsitod(int s,int d)
-{
-  //TOBEDONE
-  assert(0);
-  assem_debug("fsitod d%d,s%d",d,s);
-  output_w32(0xeeb80bc0|((d&7)<<12)|((s&14)>>1)|((s&1)<<5));
-} 
-
-static void emit_fcvtds(int s,int d)
-{
-  //TOBEDONE
-  assert(0);
-  assem_debug("fcvtds d%d,s%d",d,s);
-  output_w32(0xeeb70ac0|((d&7)<<12)|((s&14)>>1)|((s&1)<<5));
-} 
-
-static void emit_fcvtsd(int s,int d)
-{
-  //TOBEDONE
-  assert(0);
-  assem_debug("fcvtsd s%d,d%d",d,s);
-  output_w32(0xeeb70bc0|((d&14)<<11)|((d&1)<<22)|(s&7));
+  assert((dr==30)||(dr==31));
+  assem_debug("str d%d,[%s]",dr,regname[r]);
+  output_w32(0xfd000000|r<<5|dr);
 } 
 
 static void emit_fsqrts(int s,int d)
 {
-  //TOBEDONE
-  assert(0);
-  assem_debug("fsqrts d%d,s%d",d,s);
-  output_w32(0xeeb10ac0|((d&14)<<11)|((d&1)<<22)|((s&14)>>1)|((s&1)<<5));
+  assert(s==31);
+  assert(d==31);
+  assem_debug("fsqrts s%d,s%d",d,s);
+  output_w32(0x1e21c000|s<<5|d);
 } 
 
 static void emit_fsqrtd(int s,int d)
 {
-  //TOBEDONE
-  assert(0);
-  assem_debug("fsqrtd s%d,d%d",d,s);
-  output_w32(0xeeb10bc0|((d&7)<<12)|(s&7));
+  assert(s==31);
+  assert(d==31);
+  assem_debug("fsqrtd d%d,d%d",d,s);
+  output_w32(0x1e61c000|s<<5|d);
 } 
 
 static void emit_fabss(int s,int d)
 {
-  //TOBEDONE
-  assert(0);
-  assem_debug("fabss d%d,s%d",d,s);
-  output_w32(0xeeb00ac0|((d&14)<<11)|((d&1)<<22)|((s&14)>>1)|((s&1)<<5));
+  assert(s==31);
+  assert(d==31);
+  assem_debug("fabss s%d,s%d",d,s);
+  output_w32(0x1e20c000|s<<5|d);
 } 
 
 static void emit_fabsd(int s,int d)
 {
-  //TOBEDONE
-  assert(0);
-  assem_debug("fabsd s%d,d%d",d,s);
-  output_w32(0xeeb00bc0|((d&7)<<12)|(s&7));
+  assert(s==31);
+  assert(d==31);
+  assem_debug("fabsd d%d,d%d",d,s);
+  output_w32(0x1e60c000|s<<5|d);
 } 
 
 static void emit_fnegs(int s,int d)
 {
-  //TOBEDONE
-  assert(0);
-  assem_debug("fnegs d%d,s%d",d,s);
-  output_w32(0xeeb10a40|((d&14)<<11)|((d&1)<<22)|((s&14)>>1)|((s&1)<<5));
+  assert(s==31);
+  assert(d==31);
+  assem_debug("fnegs s%d,s%d",d,s);
+  output_w32(0x1e214000|s<<5|d);
 } 
 
 static void emit_fnegd(int s,int d)
 {
-  //TOBEDONE
-  assert(0);
-  assem_debug("fnegd s%d,d%d",d,s);
-  output_w32(0xeeb10b40|((d&7)<<12)|(s&7));
+  assert(s==31);
+  assert(d==31);
+  assem_debug("fnegd d%d,d%d",d,s);
+  output_w32(0x1e614000|s<<5|d);
 } 
 
 static void emit_fadds(int s1,int s2,int d)
 {
-  //TOBEDONE
-  assert(0);
+  assert(s1==31);
+  assert((s2==30)||(s2==31));
+  assert(d==31);
   assem_debug("fadds s%d,s%d,s%d",d,s1,s2);
-  output_w32(0xee300a00|((d&14)<<11)|((d&1)<<22)|((s1&14)<<15)|((s1&1)<<7)|((s2&14)>>1)|((s2&1)<<5));
+  output_w32(0x1e202800|s2<<16|s1<<5|d);
 } 
 
 static void emit_faddd(int s1,int s2,int d)
 {
-  //TOBEDONE
-  assert(0);
+  assert(s1==31);
+  assert((s2==30)||(s2==31));
+  assert(d==31);
   assem_debug("faddd d%d,d%d,d%d",d,s1,s2);
-  output_w32(0xee300b00|((d&7)<<12)|((s1&7)<<16)|(s2&7));
+  output_w32(0x1e602800|s2<<16|s1<<5|d);
 } 
 
 static void emit_fsubs(int s1,int s2,int d)
 {
-  //TOBEDONE
-  assert(0);
+  assert(s1==31);
+  assert((s2==30)||(s2==31));
+  assert(d==31);
   assem_debug("fsubs s%d,s%d,s%d",d,s1,s2);
-  output_w32(0xee300a40|((d&14)<<11)|((d&1)<<22)|((s1&14)<<15)|((s1&1)<<7)|((s2&14)>>1)|((s2&1)<<5));
+  output_w32(0x1e203800|s2<<16|s1<<5|d);
 } 
 
 static void emit_fsubd(int s1,int s2,int d)
 {
-  //TOBEDONE
-  assert(0);
+  assert(s1==31);
+  assert((s2==30)||(s2==31));
+  assert(d==31);
   assem_debug("fsubd d%d,d%d,d%d",d,s1,s2);
-  output_w32(0xee300b40|((d&7)<<12)|((s1&7)<<16)|(s2&7));
+  output_w32(0x1e603800|s2<<16|s1<<5|d);
 } 
 
 static void emit_fmuls(int s1,int s2,int d)
 {
-  //TOBEDONE
-  assert(0);
+  assert(s1==31);
+  assert((s2==30)||(s2==31));
+  assert(d==31);
   assem_debug("fmuls s%d,s%d,s%d",d,s1,s2);
-  output_w32(0xee200a00|((d&14)<<11)|((d&1)<<22)|((s1&14)<<15)|((s1&1)<<7)|((s2&14)>>1)|((s2&1)<<5));
+  output_w32(0x1e200800|s2<<16|s1<<5|d);
 } 
 
 static void emit_fmuld(int s1,int s2,int d)
 {
-  //TOBEDONE
-  assert(0);
+  assert(s1==31);
+  assert((s2==30)||(s2==31));
+  assert(d==31);
   assem_debug("fmuld d%d,d%d,d%d",d,s1,s2);
-  output_w32(0xee200b00|((d&7)<<12)|((s1&7)<<16)|(s2&7));
+  output_w32(0x1e600800|s2<<16|s1<<5|d);
 } 
 
 static void emit_fdivs(int s1,int s2,int d)
 {
-  //TOBEDONE
-  assert(0);
+  assert(s1==31);
+  assert((s2==30)||(s2==31));
+  assert(d==31);
   assem_debug("fdivs s%d,s%d,s%d",d,s1,s2);
-  output_w32(0xee800a00|((d&14)<<11)|((d&1)<<22)|((s1&14)<<15)|((s1&1)<<7)|((s2&14)>>1)|((s2&1)<<5));
+  output_w32(0x1e201800|s2<<16|s1<<5|d);
 } 
 
 static void emit_fdivd(int s1,int s2,int d)
 {
-  //TOBEDONE
-  assert(0);
+  assert(s1==31);
+  assert((s2==30)||(s2==31));
+  assert(d==31);
   assem_debug("fdivd d%d,d%d,d%d",d,s1,s2);
-  output_w32(0xee800b00|((d&7)<<12)|((s1&7)<<16)|(s2&7));
-} 
+  output_w32(0x1e601800|s2<<16|s1<<5|d);
+}
+
+static void emit_scvtf_s_w(int rs,int rd)
+{
+  //int32_t -> float
+  assert(rs!=29);
+  assert(rd==31);
+  assem_debug("scvtf s%d,%s",rd,regname[rs]);
+  output_w32(0x1e220000|rs<<5|rd);
+}
+
+static void emit_scvtf_d_w(int rs,int rd)
+{
+  //int32_t -> double
+  assert(rs!=29);
+  assert(rd==31);
+  assem_debug("scvtf d%d,%s",rd,regname[rs]);
+  output_w32(0x1e620000|rs<<5|rd);
+}
+
+static void emit_scvtf_s_l(int rs,int rd)
+{
+  //int64_t -> float
+  assert(rs!=29);
+  assert(rd==31);
+  assem_debug("scvtf s%d,%s",rd,regname64[rs]);
+  output_w32(0x9e220000|rs<<5|rd);
+}
+
+static void emit_scvtf_d_l(int rs,int rd)
+{
+  //int64_t -> double
+  assert(rs!=29);
+  assert(rd==31);
+  assem_debug("scvtf d%d,%s",rd,regname64[rs]);
+  output_w32(0x9e620000|rs<<5|rd);
+}
+
+static void emit_fcvt_d_s(int rs,int rd)
+{
+  //float -> double
+  assert(rs==31);
+  assert(rd==31);
+  assem_debug("fcvt d%d,s%d",rd,rs);
+  output_w32(0x1e22c000|rs<<5|rd);
+}
+
+static void emit_fcvt_s_d(int rs,int rd)
+{
+  //double -> float
+  assert(rs==31);
+  assert(rd==31);
+  assem_debug("fcvt s%d,d%d",rd,rs);
+  output_w32(0x1e624000|rs<<5|rd);
+}
+
+static void emit_fcvtns_l_s(int rs,int rd)
+{
+  //float -> int64_t round toward nearest
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtns %s,s%d,",regname64[rd],rs);
+  output_w32(0x9e200000|rs<<5|rd);
+}
+
+static void emit_fcvtns_w_s(int rs,int rd)
+{
+  //float -> int32_t round toward nearest
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtns %s,s%d,",regname[rd],rs);
+  output_w32(0x1e200000|rs<<5|rd);
+}
+
+static void emit_fcvtns_l_d(int rs,int rd)
+{
+  //double -> int64_t round toward nearest
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtns %s,d%d,",regname64[rd],rs);
+  output_w32(0x9e600000|rs<<5|rd);
+}
+
+static void emit_fcvtns_w_d(int rs,int rd)
+{
+  //double -> int32_t round toward nearest
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtns %s,d%d,",regname[rd],rs);
+  output_w32(0x1e600000|rs<<5|rd);
+}
+
+static void emit_fcvtzs_l_s(int rs,int rd)
+{
+  //float -> int64_t round toward zero
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtzs %s,s%d,",regname64[rd],rs);
+  output_w32(0x9e380000|rs<<5|rd);
+}
+
+static void emit_fcvtzs_w_s(int rs,int rd)
+{
+  //float -> int32_t round toward zero
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtzs %s,s%d,",regname[rd],rs);
+  output_w32(0x1e380000|rs<<5|rd);
+}
+
+static void emit_fcvtzs_l_d(int rs,int rd)
+{
+  //double -> int64_t round toward zero
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtzs %s,d%d,",regname64[rd],rs);
+  output_w32(0x9e780000|rs<<5|rd);
+}
+
+static void emit_fcvtzs_w_d(int rs,int rd)
+{
+  //double -> int32_t round toward zero
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtzs %s,d%d,",regname[rd],rs);
+  output_w32(0x1e780000|rs<<5|rd);
+}
+
+static void emit_fcvtps_l_s(int rs,int rd)
+{
+  //float -> int64_t round toward +inf
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtps %s,s%d,",regname64[rd],rs);
+  output_w32(0x9e280000|rs<<5|rd);
+}
+
+static void emit_fcvtps_w_s(int rs,int rd)
+{
+  //float -> int32_t round toward +inf
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtps %s,s%d,",regname[rd],rs);
+  output_w32(0x1e280000|rs<<5|rd);
+}
+
+static void emit_fcvtps_l_d(int rs,int rd)
+{
+  //double -> int64_t round toward +inf
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtps %s,d%d,",regname64[rd],rs);
+  output_w32(0x9e680000|rs<<5|rd);
+}
+
+static void emit_fcvtps_w_d(int rs,int rd)
+{
+  //double -> int32_t round toward +inf
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtps %s,d%d,",regname[rd],rs);
+  output_w32(0x1e680000|rs<<5|rd);
+}
+
+static void emit_fcvtms_l_s(int rs,int rd)
+{
+  //float -> int64_t round toward -inf
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtms %s,s%d,",regname64[rd],rs);
+  output_w32(0x9e300000|rs<<5|rd);
+}
+
+static void emit_fcvtms_w_s(int rs,int rd)
+{
+  //float -> int32_t round toward -inf
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtms %s,s%d,",regname[rd],rs);
+  output_w32(0x1e300000|rs<<5|rd);
+}
+
+static void emit_fcvtms_l_d(int rs,int rd)
+{
+  //double -> int64_t round toward -inf
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtms %s,d%d,",regname64[rd],rs);
+  output_w32(0x9e700000|rs<<5|rd);
+}
+
+static void emit_fcvtms_w_d(int rs,int rd)
+{
+  //double -> int32_t round toward -inf
+  assert(rs==31);
+  assert(rd!=29);
+  assem_debug("fcvtms %s,d%d,",regname[rd],rs);
+  output_w32(0x1e700000|rs<<5|rd);
+}
 
 static void emit_fcmps(int x,int y)
 {
-  //TOBEDONE
-  assert(0);
-  assem_debug("fcmps s14, s15");
-  output_w32(0xeeb47a67);
+  assert(x==30);
+  assert(y==31);
+  assem_debug("fcmp s%d, s%d",x,y);
+  output_w32(0x1e202000|y<<16|x<<5);
 } 
 
 static void emit_fcmpd(int x,int y)
 {
-  //TOBEDONE
-  assert(0);
-  assem_debug("fcmpd d6, d7");
-  output_w32(0xeeb46b47);
-} 
-
-static void emit_fmstat(void)
-{
-  //TOBEDONE
-  assert(0);
-  assem_debug("fmstat");
-  output_w32(0xeef1fa10);
+  assert(x==30);
+  assert(y==31);
+  assem_debug("fcmp d%d, d%d",x,y);
+  output_w32(0x1e602000|y<<16|x<<5);
 }
 
 static void emit_jno_unlikely(int a)
@@ -5165,11 +5369,17 @@ static void cop1_assemble(int i,struct regstat *i_regs)
     if(copr==31)
     {
       emit_writeword(sl,(intptr_t)&FCR31);
+
       // Set the rounding mode
-      //FIXME
-      //char temp=get_reg(i_regs->regmap,-1);
-      //emit_andimm(sl,3,temp);
-      //emit_fldcw_indexed((int)&rounding_modes,temp);
+      signed char temp=get_reg(i_regs->regmap,-1);
+      assert(temp>=0);
+      emit_andimm(sl,3,temp);
+      emit_addimm64(FP,(intptr_t)&rounding_modes-(intptr_t)&dynarec_local,HOST_TEMPREG);
+      emit_readword_dualindexedx4(HOST_TEMPREG,temp,temp);
+      output_w32(0xd53b4400|HOST_TEMPREG); /*Read FPCR*/
+      emit_andimm(HOST_TEMPREG,~0x600000,HOST_TEMPREG); /*Clear RMode*/
+      emit_or(temp,HOST_TEMPREG,HOST_TEMPREG); /*Set RMode*/
+      output_w32(0xd51b4400|HOST_TEMPREG); /*Write FPCR*/
     }
   }
 }
@@ -5383,63 +5593,222 @@ static void fconv_assemble_arm64(int i,struct regstat *i_regs)
     add_stub(FP_STUB,jaddr,(intptr_t)out,i,rs,(intptr_t)i_regs,is_delayslot,0);
     cop1_usable=1;
   }
-  
-  #if (defined(__VFP_FP__) && !defined(__SOFTFP__))
+
+  /*Single-precision to Integer*/
+
   //TOBEDONE
-  assert(0);
-  if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0d) { // trunc_w_s
+  //if(opcode2[i]==0x10&&(source[i]&0x3f)==0x24) { //cvt_w_s
+  //}
+
+  //if(opcode2[i]==0x10&&(source[i]&0x3f)==0x25) { //cvt_l_s
+  //}
+
+  if(opcode2[i]==0x10&&(source[i]&0x3f)==0x08) { //round_l_s
     emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
-    emit_flds(temp,15);
-    emit_ftosizs(15,15); // float->int, truncate
+    emit_flds(temp,31);
+    emit_fcvtns_l_s(31,HOST_TEMPREG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed64(HOST_TEMPREG,0,temp);
+    return;
+  }
+  if(opcode2[i]==0x10&&(source[i]&0x3f)==0x09) { //trunc_l_s
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_flds(temp,31);
+    emit_fcvtzs_l_s(31,HOST_TEMPREG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed64(HOST_TEMPREG,0,temp);
+    return;
+  }
+  if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0a) { //ceil_l_s
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_flds(temp,31);
+    emit_fcvtps_l_s(31,HOST_TEMPREG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed64(HOST_TEMPREG,0,temp);
+    return;
+  }
+  if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0b) { //floor_l_s
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_flds(temp,31);
+    emit_fcvtms_l_s(31,HOST_TEMPREG);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed64(HOST_TEMPREG,0,temp);
+    return;
+  }
+  if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0c) { //round_w_s
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_flds(temp,31);
+    emit_fcvtns_w_s(31,HOST_TEMPREG);
     if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
       emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
-    emit_fsts(15,temp);
+    emit_writeword_indexed(HOST_TEMPREG,0,temp);
     return;
   }
-  if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0d) { // trunc_w_d
-    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
-    emit_vldr(temp,7);
-    emit_ftosizd(7,13); // double->int, truncate
-    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
-    emit_fsts(13,temp);
-    return;
-  }
-  
-  if(opcode2[i]==0x14&&(source[i]&0x3f)==0x20) { // cvt_s_w
+  if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0d) { //trunc_w_s
     emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
-    emit_flds(temp,13);
+    emit_flds(temp,31);
+    emit_fcvtzs_w_s(31,HOST_TEMPREG);
     if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
       emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
-    emit_fsitos(13,15);
-    emit_fsts(15,temp);
+    emit_writeword_indexed(HOST_TEMPREG,0,temp);
     return;
   }
-  if(opcode2[i]==0x14&&(source[i]&0x3f)==0x21) { // cvt_d_w
+  if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0e) { //ceil_w_s
     emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
-    emit_flds(temp,13);
-    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
-    emit_fsitod(13,7);
-    emit_vstr(7,temp);
+    emit_flds(temp,31);
+    emit_fcvtps_w_s(31,HOST_TEMPREG);
+    if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
+      emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed(HOST_TEMPREG,0,temp);
     return;
   }
-  
-  if(opcode2[i]==0x10&&(source[i]&0x3f)==0x21) { // cvt_d_s
+  if(opcode2[i]==0x10&&(source[i]&0x3f)==0x0f) { //floor_w_s
     emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
-    emit_flds(temp,13);
-    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
-    emit_fcvtds(13,7);
-    emit_vstr(7,temp);
+    emit_flds(temp,31);
+    emit_fcvtms_w_s(31,HOST_TEMPREG);
+    if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
+      emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed(HOST_TEMPREG,0,temp);
     return;
   }
-  if(opcode2[i]==0x11&&(source[i]&0x3f)==0x20) { // cvt_s_d
+
+  /*Double-precision to Integer*/
+
+  //TOBEDONE
+  //if(opcode2[i]==0x11&&(source[i]&0x3f)==0x24) { //cvt_w_d
+  //}
+
+  //if(opcode2[i]==0x11&&(source[i]&0x3f)==0x25) { //cvt_l_d
+  //}
+
+  if(opcode2[i]==0x11&&(source[i]&0x3f)==0x08) { //round_l_d
     emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
-    emit_vldr(temp,7);
-    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
-    emit_fcvtsd(7,13);
-    emit_fsts(13,temp);
+    emit_fldd(temp,31);
+    emit_fcvtns_l_d(31,HOST_TEMPREG);
+    if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
+      emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed64(HOST_TEMPREG,0,temp);
     return;
   }
-  #endif
+  if(opcode2[i]==0x11&&(source[i]&0x3f)==0x09) { //trunc_l_d
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_fldd(temp,31);
+    emit_fcvtzs_l_d(31,HOST_TEMPREG);
+    if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
+      emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed64(HOST_TEMPREG,0,temp);
+    return;
+  }
+  if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0a) { //ceil_l_d
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_fldd(temp,31);
+    emit_fcvtps_l_d(31,HOST_TEMPREG);
+    if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
+      emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed64(HOST_TEMPREG,0,temp);
+    return;
+  }
+  if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0b) { //floor_l_d
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_fldd(temp,31);
+    emit_fcvtms_l_d(31,HOST_TEMPREG);
+    if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
+      emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed64(HOST_TEMPREG,0,temp);
+    return;
+  }
+  if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0c) { //round_w_d
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_fldd(temp,31);
+    emit_fcvtns_w_d(31,HOST_TEMPREG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed(HOST_TEMPREG,0,temp);
+    return;
+  }
+  if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0d) { //trunc_w_d
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_fldd(temp,31);
+    emit_fcvtzs_w_d(31,HOST_TEMPREG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed(HOST_TEMPREG,0,temp);
+    return;
+  }
+  if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0e) { //ceil_w_d
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_fldd(temp,31);
+    emit_fcvtps_w_d(31,HOST_TEMPREG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed(HOST_TEMPREG,0,temp);
+    return;
+  }
+  if(opcode2[i]==0x11&&(source[i]&0x3f)==0x0f) { //floor_w_d
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_fldd(temp,31);
+    emit_fcvtms_w_d(31,HOST_TEMPREG);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+    emit_writeword_indexed(HOST_TEMPREG,0,temp);
+    return;
+  }
+
+  /*Single-precision to Double-precision*/
+  if(opcode2[i]==0x10&&(source[i]&0x3f)==0x21) { //cvt_d_s
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_flds(temp,31);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_fcvt_d_s(31,31);
+    emit_fstd(31,temp);
+    return;
+  }
+
+  /*Double-precision to Single-precision*/
+  if(opcode2[i]==0x11&&(source[i]&0x3f)==0x20) { //cvt_s_d
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_fldd(temp,31);
+    emit_fcvt_s_d(31,31);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+    emit_fsts(31,temp);
+    return;
+  }
+
+  /*Integer to Single-precision*/
+  if(opcode2[i]==0x14&&(source[i]&0x3f)==0x20) { //cvt_s_w
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_readword_indexed(0,temp,HOST_TEMPREG);
+    emit_scvtf_s_w(HOST_TEMPREG,31);
+    if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
+      emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+    emit_fsts(31,temp);
+    return;
+  }
+
+  if(opcode2[i]==0x15&&(source[i]&0x3f)==0x20) { //cvt_s_l
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_readword_indexed64(0,temp,HOST_TEMPREG);
+    emit_scvtf_s_l(HOST_TEMPREG,31);
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
+    emit_fsts(31,temp);
+    return;
+  }
+
+  /*Integer Double-precision*/
+  if(opcode2[i]==0x14&&(source[i]&0x3f)==0x21) { //cvt_d_w
+    emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
+    emit_readword_indexed(0,temp,HOST_TEMPREG);
+    emit_scvtf_d_w(HOST_TEMPREG,31);
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_fstd(31,temp);
+    return;
+  }
+
+  if(opcode2[i]==0x15&&(source[i]&0x3f)==0x21) { //cvt_d_l
+    emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
+    emit_readword_indexed64(0,temp,HOST_TEMPREG);
+    emit_scvtf_d_l(HOST_TEMPREG,31);
+    if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f))
+      emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
+    emit_fstd(31,temp);
+    return;
+  }
   
   // C emulation code
   
@@ -5615,56 +5984,52 @@ static void fcomp_assemble(int i,struct regstat *i_regs)
     return;
   }
   
-  #if (defined(__VFP_FP__) && !defined(__SOFTFP__)) 
-  //TOBEDONE
-  assert(0);
   if(opcode2[i]==0x10) {
     emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
     emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>16)&0x1f],HOST_TEMPREG);
-    emit_orimm(fs,0x800000,fs);
-    emit_flds(temp,14);
-    emit_flds(HOST_TEMPREG,15);
-    emit_fcmps(14,15);
-    emit_fmstat();
-    if((source[i]&0x3f)==0x31) emit_bicvc_imm(fs,0x800000,fs); // c_un_s
-    if((source[i]&0x3f)==0x32) emit_bicne_imm(fs,0x800000,fs); // c_eq_s
-    if((source[i]&0x3f)==0x33) {emit_bicne_imm(fs,0x800000,fs);emit_orrvs_imm(fs,0x800000,fs);} // c_ueq_s
-    if((source[i]&0x3f)==0x34) emit_biccs_imm(fs,0x800000,fs); // c_olt_s
-    if((source[i]&0x3f)==0x35) {emit_biccs_imm(fs,0x800000,fs);emit_orrvs_imm(fs,0x800000,fs);} // c_ult_s 
-    if((source[i]&0x3f)==0x36) emit_bichi_imm(fs,0x800000,fs); // c_ole_s
-    if((source[i]&0x3f)==0x37) {emit_bichi_imm(fs,0x800000,fs);emit_orrvs_imm(fs,0x800000,fs);} // c_ule_s
-    if((source[i]&0x3f)==0x3a) emit_bicne_imm(fs,0x800000,fs); // c_seq_s
-    if((source[i]&0x3f)==0x3b) emit_bicne_imm(fs,0x800000,fs); // c_ngl_s
-    if((source[i]&0x3f)==0x3c) emit_biccs_imm(fs,0x800000,fs); // c_lt_s
-    if((source[i]&0x3f)==0x3d) emit_biccs_imm(fs,0x800000,fs); // c_nge_s
-    if((source[i]&0x3f)==0x3e) emit_bichi_imm(fs,0x800000,fs); // c_le_s
-    if((source[i]&0x3f)==0x3f) emit_bichi_imm(fs,0x800000,fs); // c_ngt_s
+    emit_flds(temp,30);
+    emit_flds(HOST_TEMPREG,31);
+    emit_andimm(fs,~0x800000,fs);
+    emit_orimm(fs,0x800000,temp);
+    emit_fcmps(30,31);
+    if((source[i]&0x3f)==0x31) emit_csel_vs(temp,fs,fs); // c_un_s
+    if((source[i]&0x3f)==0x32) emit_csel_eq(temp,fs,fs); // c_eq_s
+    if((source[i]&0x3f)==0x33) {emit_csel_eq(temp,fs,fs);emit_csel_vs(temp,fs,fs);} // c_ueq_s
+    if((source[i]&0x3f)==0x34) emit_csel_cc(temp,fs,fs); // c_olt_s
+    if((source[i]&0x3f)==0x35) {emit_csel_cc(temp,fs,fs);emit_csel_vs(temp,fs,fs);} // c_ult_s
+    if((source[i]&0x3f)==0x36) emit_csel_ls(temp,fs,fs); // c_ole_s
+    if((source[i]&0x3f)==0x37) {emit_csel_ls(temp,fs,fs);emit_csel_vs(temp,fs,fs);} // c_ule_s
+    if((source[i]&0x3f)==0x3a) emit_csel_eq(temp,fs,fs); // c_seq_s
+    if((source[i]&0x3f)==0x3b) emit_csel_eq(temp,fs,fs); // c_ngl_s
+    if((source[i]&0x3f)==0x3c) emit_csel_cc(temp,fs,fs); // c_lt_s
+    if((source[i]&0x3f)==0x3d) emit_csel_cc(temp,fs,fs); // c_nge_s
+    if((source[i]&0x3f)==0x3e) emit_csel_ls(temp,fs,fs); // c_le_s
+    if((source[i]&0x3f)==0x3f) emit_csel_ls(temp,fs,fs); // c_ngt_s
     return;
   }
   if(opcode2[i]==0x11) {
     emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
     emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>16)&0x1f],HOST_TEMPREG);
-    emit_orimm(fs,0x800000,fs);
-    emit_vldr(temp,6);
-    emit_vldr(HOST_TEMPREG,7);
-    emit_fcmpd(6,7);
-    emit_fmstat();
-    if((source[i]&0x3f)==0x31) emit_bicvc_imm(fs,0x800000,fs); // c_un_d
-    if((source[i]&0x3f)==0x32) emit_bicne_imm(fs,0x800000,fs); // c_eq_d
-    if((source[i]&0x3f)==0x33) {emit_bicne_imm(fs,0x800000,fs);emit_orrvs_imm(fs,0x800000,fs);} // c_ueq_d
-    if((source[i]&0x3f)==0x34) emit_biccs_imm(fs,0x800000,fs); // c_olt_d
-    if((source[i]&0x3f)==0x35) {emit_biccs_imm(fs,0x800000,fs);emit_orrvs_imm(fs,0x800000,fs);} // c_ult_d
-    if((source[i]&0x3f)==0x36) emit_bichi_imm(fs,0x800000,fs); // c_ole_d
-    if((source[i]&0x3f)==0x37) {emit_bichi_imm(fs,0x800000,fs);emit_orrvs_imm(fs,0x800000,fs);} // c_ule_d
-    if((source[i]&0x3f)==0x3a) emit_bicne_imm(fs,0x800000,fs); // c_seq_d
-    if((source[i]&0x3f)==0x3b) emit_bicne_imm(fs,0x800000,fs); // c_ngl_d
-    if((source[i]&0x3f)==0x3c) emit_biccs_imm(fs,0x800000,fs); // c_lt_d
-    if((source[i]&0x3f)==0x3d) emit_biccs_imm(fs,0x800000,fs); // c_nge_d
-    if((source[i]&0x3f)==0x3e) emit_bichi_imm(fs,0x800000,fs); // c_le_d
-    if((source[i]&0x3f)==0x3f) emit_bichi_imm(fs,0x800000,fs); // c_ngt_d
+    emit_fldd(temp,30);
+    emit_fldd(HOST_TEMPREG,31);
+    emit_andimm(fs,~0x800000,fs);
+    emit_orimm(fs,0x800000,temp);
+    emit_fcmpd(30,31);
+    if((source[i]&0x3f)==0x31) emit_csel_vs(temp,fs,fs); // c_un_d
+    if((source[i]&0x3f)==0x32) emit_csel_eq(temp,fs,fs); // c_eq_d
+    if((source[i]&0x3f)==0x33) {emit_csel_eq(temp,fs,fs);emit_csel_vs(temp,fs,fs);} // c_ueq_d
+    if((source[i]&0x3f)==0x34) emit_csel_cc(temp,fs,fs); // c_olt_d
+    if((source[i]&0x3f)==0x35) {emit_csel_cc(temp,fs,fs);emit_csel_vs(temp,fs,fs);} // c_ult_d
+    if((source[i]&0x3f)==0x36) emit_csel_ls(temp,fs,fs); // c_ole_d
+    if((source[i]&0x3f)==0x37) {emit_csel_ls(temp,fs,fs);emit_csel_vs(temp,fs,fs);} // c_ule_d
+    if((source[i]&0x3f)==0x3a) emit_csel_eq(temp,fs,fs); // c_seq_d
+    if((source[i]&0x3f)==0x3b) emit_csel_eq(temp,fs,fs); // c_ngl_d
+    if((source[i]&0x3f)==0x3c) emit_csel_cc(temp,fs,fs); // c_lt_d
+    if((source[i]&0x3f)==0x3d) emit_csel_cc(temp,fs,fs); // c_nge_d
+    if((source[i]&0x3f)==0x3e) emit_csel_ls(temp,fs,fs); // c_le_d
+    if((source[i]&0x3f)==0x3f) emit_csel_ls(temp,fs,fs); // c_ngt_d
     return;
   }
-  #endif
   
   // C only
   
@@ -5733,23 +6098,20 @@ static void float_assemble(int i,struct regstat *i_regs)
     cop1_usable=1;
   }
   
-  #if (defined(__VFP_FP__) && !defined(__SOFTFP__))
-  //TOBEDONE
-  assert(0);
   if((source[i]&0x3f)==6) // mov
   {
     if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
       if(opcode2[i]==0x10) {
         emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
         emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],HOST_TEMPREG);
-        emit_readword_indexed(0,temp,temp);
-        emit_writeword_indexed(temp,0,HOST_TEMPREG);
+        emit_flds(temp,31);
+        emit_fsts(31,HOST_TEMPREG);
       }
       if(opcode2[i]==0x11) {
         emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
         emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],HOST_TEMPREG);
-        emit_vldr(temp,7);
-        emit_vstr(7,HOST_TEMPREG);
+        emit_fldd(temp,31);
+        emit_fstd(31,HOST_TEMPREG);
       }
     }
     return;
@@ -5759,31 +6121,31 @@ static void float_assemble(int i,struct regstat *i_regs)
   {
     if(opcode2[i]==0x10) {
       emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>11)&0x1f],temp);
-      emit_flds(temp,15);
+      emit_flds(temp,31);
       if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
         emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
       }
       if((source[i]&0x3f)==4) // sqrt
-        emit_fsqrts(15,15);
+        emit_fsqrts(31,31);
       if((source[i]&0x3f)==5) // abs
-        emit_fabss(15,15);
+        emit_fabss(31,31);
       if((source[i]&0x3f)==7) // neg
-        emit_fnegs(15,15);
-      emit_fsts(15,temp);
+        emit_fnegs(31,31);
+      emit_fsts(31,temp);
     }
     if(opcode2[i]==0x11) {
       emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>11)&0x1f],temp);
-      emit_vldr(temp,7);
+      emit_fldd(temp,31);
       if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
         emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
       }
       if((source[i]&0x3f)==4) // sqrt
-        emit_fsqrtd(7,7);
+        emit_fsqrtd(31,31);
       if((source[i]&0x3f)==5) // abs
-        emit_fabsd(7,7);
+        emit_fabsd(31,31);
       if((source[i]&0x3f)==7) // neg
-        emit_fnegd(7,7);
-      emit_vstr(7,temp);
+        emit_fnegd(31,31);
+      emit_fstd(31,temp);
     }
     return;
   }
@@ -5798,70 +6160,69 @@ static void float_assemble(int i,struct regstat *i_regs)
     if(((source[i]>>11)&0x1f)!=((source[i]>>16)&0x1f)) {
       if(opcode2[i]==0x10) {
         emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>16)&0x1f],HOST_TEMPREG);
-        emit_flds(temp,15);
-        emit_flds(HOST_TEMPREG,13);
+        emit_flds(temp,31);
+        emit_flds(HOST_TEMPREG,30);
         if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
           if(((source[i]>>16)&0x1f)!=((source[i]>>6)&0x1f)) {
             emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
           }
         }
-        if((source[i]&0x3f)==0) emit_fadds(15,13,15);
-        if((source[i]&0x3f)==1) emit_fsubs(15,13,15);
-        if((source[i]&0x3f)==2) emit_fmuls(15,13,15);
-        if((source[i]&0x3f)==3) emit_fdivs(15,13,15);
+        if((source[i]&0x3f)==0) emit_fadds(31,30,31);
+        if((source[i]&0x3f)==1) emit_fsubs(31,30,31);
+        if((source[i]&0x3f)==2) emit_fmuls(31,30,31);
+        if((source[i]&0x3f)==3) emit_fdivs(31,30,31);
         if(((source[i]>>16)&0x1f)==((source[i]>>6)&0x1f)) {
-          emit_fsts(15,HOST_TEMPREG);
+          emit_fsts(31,HOST_TEMPREG);
         }else{
-          emit_fsts(15,temp);
+          emit_fsts(31,temp);
         }
       }
       else if(opcode2[i]==0x11) {
         emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>16)&0x1f],HOST_TEMPREG);
-        emit_vldr(temp,7);
-        emit_vldr(HOST_TEMPREG,6);
+        emit_fldd(temp,31);
+        emit_fldd(HOST_TEMPREG,30);
         if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
           if(((source[i]>>16)&0x1f)!=((source[i]>>6)&0x1f)) {
             emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
           }
         }
-        if((source[i]&0x3f)==0) emit_faddd(7,6,7);
-        if((source[i]&0x3f)==1) emit_fsubd(7,6,7);
-        if((source[i]&0x3f)==2) emit_fmuld(7,6,7);
-        if((source[i]&0x3f)==3) emit_fdivd(7,6,7);
+        if((source[i]&0x3f)==0) emit_faddd(31,30,31);
+        if((source[i]&0x3f)==1) emit_fsubd(31,30,31);
+        if((source[i]&0x3f)==2) emit_fmuld(31,30,31);
+        if((source[i]&0x3f)==3) emit_fdivd(31,30,31);
         if(((source[i]>>16)&0x1f)==((source[i]>>6)&0x1f)) {
-          emit_vstr(7,HOST_TEMPREG);
+          emit_fstd(31,HOST_TEMPREG);
         }else{
-          emit_vstr(7,temp);
+          emit_fstd(31,temp);
         }
       }
     }
     else {
       if(opcode2[i]==0x10) {
-        emit_flds(temp,15);
+        emit_flds(temp,31);
         if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
           emit_readword64((intptr_t)&reg_cop1_simple[(source[i]>>6)&0x1f],temp);
         }
-        if((source[i]&0x3f)==0) emit_fadds(15,15,15);
-        if((source[i]&0x3f)==1) emit_fsubs(15,15,15);
-        if((source[i]&0x3f)==2) emit_fmuls(15,15,15);
-        if((source[i]&0x3f)==3) emit_fdivs(15,15,15);
-        emit_fsts(15,temp);
+        if((source[i]&0x3f)==0) emit_fadds(31,31,31);
+        if((source[i]&0x3f)==1) emit_fsubs(31,31,31);
+        if((source[i]&0x3f)==2) emit_fmuls(31,31,31);
+        if((source[i]&0x3f)==3) emit_fdivs(31,31,31);
+        emit_fsts(31,temp);
       }
       else if(opcode2[i]==0x11) {
-        emit_vldr(temp,7);
+        emit_fldd(temp,31);
         if(((source[i]>>11)&0x1f)!=((source[i]>>6)&0x1f)) {
           emit_readword64((intptr_t)&reg_cop1_double[(source[i]>>6)&0x1f],temp);
         }
-        if((source[i]&0x3f)==0) emit_faddd(7,7,7);
-        if((source[i]&0x3f)==1) emit_fsubd(7,7,7);
-        if((source[i]&0x3f)==2) emit_fmuld(7,7,7);
-        if((source[i]&0x3f)==3) emit_fdivd(7,7,7);
-        emit_vstr(7,temp);
+        if((source[i]&0x3f)==0) emit_faddd(31,31,31);
+        if((source[i]&0x3f)==1) emit_fsubd(31,31,31);
+        if((source[i]&0x3f)==2) emit_fmuld(31,31,31);
+        if((source[i]&0x3f)==3) emit_fdivd(31,31,31);
+        emit_fstd(31,temp);
       }
     }
     return;
   }
-  #endif
   
   u_int hr,reglist=0;
   for(hr=0;hr<HOST_REGS;hr++) {
