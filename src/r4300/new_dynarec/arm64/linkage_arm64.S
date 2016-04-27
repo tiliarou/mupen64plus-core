@@ -314,8 +314,6 @@ GLOBAL_FUNCTION(verify_code_vm):
     add    x1, x1, x6, lsl #2
     lsl    x6, x6, #2
 .C1:
-    /*TOBEDONE: Is it really necessary to test all block address mapping?*/
-    /*verify_dirty only compare the mapping of the first and last-1 block address*/
     add    w4, w4, #1
     cmp    x6, x7, lsl #2
     b.ne   .D5
@@ -732,16 +730,83 @@ GLOBAL_FUNCTION(read_nomemd_new):
     ret
     
 GLOBAL_FUNCTION(write_nomem_new):
-    brk 0
+    /* w3 = instr addr/flags */
+    mov    w19, w3
+    mov    x20, x30
+    bl     do_invalidate
+    mov    w3, w19
+    mov    x30, x20
+    ldr    w2, [x29, #address-dynarec_local]
+    add    x4, x29, #memory_map-dynarec_local
+    lsr    w0, w2, #12
+    ldr    x4, [x4, x0, lsl #3]
+    mov    w1, #0xc
+    tst    x4, #0x4000000000000000
+    b.ne   tlb_exception
+    ldr    w0, [x29, #cpu_word-dynarec_local]
+    str    w0, [x2, x4, lsl #2]
+    ret
     
 GLOBAL_FUNCTION(write_nomemb_new):
-    brk 0
+    /* w3 = instr addr/flags */
+    mov    w19, w3
+    mov    x20, x30
+    bl     do_invalidate
+    mov    w3, w19
+    mov    x30, x20
+    ldr    w2, [x29, #address-dynarec_local]
+    add    x4, x29, #memory_map-dynarec_local
+    lsr    w0, w2, #12
+    ldr    x4, [x4, x0, lsl #3]
+    mov    w1, #0xc
+    tst    x4, #0x4000000000000000
+    b.ne   tlb_exception
+    lsl    x4, x4, #2
+    eor    w2, w2, #3
+    ldrb   w0, [x29, #cpu_byte-dynarec_local]
+    strb   w0, [x2, x4]
+    ret
     
 GLOBAL_FUNCTION(write_nomemh_new):
-    brk 0
+    /* w3 = instr addr/flags */
+    mov    w19, w3
+    mov    x20, x30
+    bl     do_invalidate
+    mov    w3, w19
+    mov    x30, x20
+    ldr    w2, [x29, #address-dynarec_local]
+    add    x4, x29, #memory_map-dynarec_local
+    lsr    w0, w2, #12
+    ldr    x4, [x4, x0, lsl #3]
+    mov    w1, #0xc
+    tst    x4, #0x4000000000000000
+    b.ne   tlb_exception
+    lsl    x4, x4, #2
+    eor    w2, w2, #2
+    ldrh   w0, [x29, #cpu_hword-dynarec_local]
+    strh   w0, [x2, x4]
+    ret
     
 GLOBAL_FUNCTION(write_nomemd_new):
-    brk 0
+    /* w3 = instr addr/flags */
+    mov    w19, w3
+    mov    x20, x30
+    bl     do_invalidate
+    mov    w3, w19
+    mov    x30, x20
+    ldr    w2, [x29, #address-dynarec_local]
+    add    x4, x29, #memory_map-dynarec_local
+    lsr    w0, w2, #12
+    ldr    x4, [x4, x0, lsl #3]
+    mov    w1, #0xc
+    tst    x4, #0x4000000000000000
+    b.ne   tlb_exception
+    lsl    x4, x4, #2
+    ldr    w0, [x29, #cpu_dword+4-dynarec_local]
+    ldr    w1, [x29, #cpu_dword-dynarec_local]
+    str    w0, [x4]
+    str    w1, [x4, #4]
+    ret
 
 LOCAL_FUNCTION(tlb_exception):
     /* w1 = cause */
