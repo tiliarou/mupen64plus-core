@@ -4071,16 +4071,22 @@ static void address_generation(int i,struct regstat *i_regs,signed char entry[])
             if (opcode[i]==0x22||opcode[i]==0x26) { // LWL/LWR
               #ifdef RAM_OFFSET
               if((signed int)constmap[i][rs]+offset<(signed int)0x80800000) {
-                assert(0); //TOBEDONE
+                #if NEW_DYNAREC==NEW_DYNAREC_ARM64
+                emit_movimm(((constmap[i][rs]+offset)&0xFFFFFFFC),ra);
+                #else
                 emit_movimm(((constmap[i][rs]+offset)&0xFFFFFFFC)+(intptr_t)g_rdram-0x80000000,ra);
+                #endif
               }else
               #endif
               emit_movimm((constmap[i][rs]+offset)&0xFFFFFFFC,ra);
             }else if (opcode[i]==0x1a||opcode[i]==0x1b) { // LDL/LDR
               #ifdef RAM_OFFSET
               if((signed int)constmap[i][rs] + offset<(signed int)0x80800000) {
-                assert(0); //TOBEDONE
+                #if NEW_DYNAREC==NEW_DYNAREC_ARM64
+                emit_movimm(((constmap[i][rs]+offset)&0xFFFFFFF8),ra);
+                #else
                 emit_movimm(((constmap[i][rs]+offset)&0xFFFFFFF8)+(intptr_t)g_rdram-0x80000000,ra);
+                #endif
               }else
               #endif
               emit_movimm((constmap[i][rs]+offset)&0xFFFFFFF8,ra);
@@ -4151,16 +4157,22 @@ static void address_generation(int i,struct regstat *i_regs,signed char entry[])
         if (opcode[i+1]==0x22||opcode[i+1]==0x26) { // LWL/LWR
           #ifdef RAM_OFFSET
           if((signed int)constmap[i+1][rs]+offset<(signed int)0x80800000) {
-            assert(0); //TOBEDONE
+            #if NEW_DYNAREC==NEW_DYNAREC_ARM64
+            emit_movimm(((constmap[i+1][rs]+offset)&0xFFFFFFFC),ra);
+            #else
             emit_movimm(((constmap[i+1][rs]+offset)&0xFFFFFFFC)+(intptr_t)g_rdram-0x80000000,ra);
+            #endif
           }else
           #endif
           emit_movimm((constmap[i+1][rs]+offset)&0xFFFFFFFC,ra);
         }else if (opcode[i+1]==0x1a||opcode[i+1]==0x1b) { // LDL/LDR
           #ifdef RAM_OFFSET
           if((signed int)constmap[i+1][rs]+offset<(signed int)0x80800000) {
-            assert(0); //TOBEDONE
+            #if NEW_DYNAREC==NEW_DYNAREC_ARM64
+            emit_movimm(((constmap[i+1][rs]+offset)&0xFFFFFFF8),ra);
+            #else
             emit_movimm(((constmap[i+1][rs]+offset)&0xFFFFFFF8)+(intptr_t)g_rdram-0x80000000,ra);
+            #endif
           }else
           #endif
           emit_movimm((constmap[i+1][rs]+offset)&0xFFFFFFF8,ra);

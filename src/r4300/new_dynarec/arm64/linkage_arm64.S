@@ -295,7 +295,33 @@ GLOBAL_FUNCTION(verify_code_ds):
     brk 0
     
 GLOBAL_FUNCTION(verify_code_vm):
-    brk 0
+    /* w0 = instruction pointer (virtual address) */
+    /* w1 = source (virtual address) */
+    /* x2 = copy */
+    /* w3 = length */
+    mov    w4, #0xC0000000
+    cmp    w1, w4
+    b.lt   verify_code
+    add    x8, x29, #memory_map-dynarec_local
+    lsr    w4, w1, #12
+    add    w5, w1, w3
+    sub    w5, w5, #1
+    ldr    x6, [x8, x4, lsl #3]
+    lsr    w5, w5, #12
+    tst    x6, x6
+    b.mi   .D5
+    mov    x7, x6
+    add    x1, x1, x6, lsl #2
+    lsl    x6, x6, #2
+.C1:
+    /*TOBEDONE: Is it really necessary to test all block address mapping?*/
+    /*verify_dirty only compare the mapping of the first and last-1 block address*/
+    add    w4, w4, #1
+    cmp    x6, x7, lsl #2
+    b.ne   .D5
+    ldr    x7, [x8, x4, lsl #3]
+    cmp    w4, w5
+    b.ls   .C1
     
 /*TOBEDONE: Optimize for 64bit*/
 GLOBAL_FUNCTION(verify_code):
@@ -324,7 +350,7 @@ GLOBAL_FUNCTION(verify_code):
     eor    w12, w7, w8
     ldr    w5, [x2], #4
     cmp    x1, x3
-    b.cc    .D2
+    b.cc   .D2
     cmp    w7, w8
     b.ne   .D4
 .D3:
@@ -364,7 +390,7 @@ GLOBAL_FUNCTION(cc_interrupt):
     b.ne   .E3
     tst    w1, w1
     b.ne   .E2
-    ret    /* br x30 */
+    ret
 .E2:
     ldr    w0, [x29, #pcaddr-dynarec_local]
     bl     get_addr_ht
@@ -425,7 +451,16 @@ GLOBAL_FUNCTION(fp_exception_ds):
     b      .F1
     
 GLOBAL_FUNCTION(jump_syscall):
-    brk 0
+    ldr    w1, [x29, #g_cp0_regs+48-dynarec_local] /* Status */
+    mov    w3, #0x80000000
+    str    w0, [x29, #g_cp0_regs+56-dynarec_local] /* EPC */
+    orr    w1, w1, #2
+    mov    w2, #0x20
+    str    w1, [x29, #g_cp0_regs+48-dynarec_local] /* Status */
+    str    w2, [x29, #g_cp0_regs+52-dynarec_local] /* Cause */
+    add    w0, w3, #0x180
+    bl     get_addr_ht
+    br     x0
     
 GLOBAL_FUNCTION(indirect_jump_indexed):
     ldr    x0, [x0, x1, lsl #3]
@@ -454,7 +489,7 @@ GLOBAL_FUNCTION(jump_eret):
     mov    w5, #248
     mov    w1, #0
 .E9:
-/*TOBEDONE: Optimize for 64bit*/
+    /*TOBEDONE: Optimize for 64bit*/
     sub    x6, x6, #8
     ldr    w2, [x6]
     ldr    w3, [x6, #4]
@@ -604,7 +639,7 @@ GLOBAL_FUNCTION(write_rdramb_new):
     ldr    w2, [x29, #address-dynarec_local]
     ldrb   w0, [x29, #cpu_byte-dynarec_local]
     eor    w2, w2, #3
-	lsl    x3, x3, #2
+    lsl    x3, x3, #2
     strb   w0, [x2, x3]
     b      .E12
     
@@ -638,7 +673,7 @@ LOCAL_FUNCTION(do_invalidate):
     ret
     
 GLOBAL_FUNCTION(read_nomem_new):
-	/* w3 = instr addr/flags */
+    /* w3 = instr addr/flags */
     ldr    w2, [x29, #address-dynarec_local]
     add    x4, x29, #memory_map-dynarec_local
     lsr    w0, w2, #12
@@ -689,8 +724,8 @@ GLOBAL_FUNCTION(read_nomemd_new):
     mov    w1, #8
     tst    x4, x4
     b.mi   tlb_exception
-	add    x4, x2, x4, lsl #2
-	ldr    w0, [x4]
+    add    x4, x2, x4, lsl #2
+    ldr    w0, [x4]
     ldr    w1, [x4, #4]
     str    w0, [x29, #readmem_dword+4-dynarec_local]
     str    w1, [x29, #readmem_dword-dynarec_local]
@@ -712,7 +747,7 @@ LOCAL_FUNCTION(tlb_exception):
     /* w1 = cause */
     /* w2 = address */
     /* w3 = instr addr/flags */
-	brk 0
+    brk 0
     
 GLOBAL_FUNCTION(breakpoint):
     brk 0
