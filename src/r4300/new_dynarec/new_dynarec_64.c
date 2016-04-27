@@ -1236,24 +1236,13 @@ void invalidate_block(u_int block)
     uintptr_t start,end;
     if(vpage>2047||(head->vaddr>>12)==block) { // Ignore vaddr hash collision
       get_bounds((intptr_t)head->addr,&start,&end);
-
-      //TOBEDONE: get_bounds returns the virtual start/end addr if vaddr>0xC0000000
-      //otherwise it return a pointer to the source code 
-      //so the virtual start/end addr is equal to (uintptr_t)source-(uintptr_t)grdram+0x80000000
-
       //DebugMessage(M64MSG_VERBOSE, "start: %x end: %x",start,end);
-      /*if(page<2048&&start>=0x80000000&&end<0x80800000) {
+      if((start!=0)&&(page<2048)&&((start-(uintptr_t)g_rdram)>=0)&&((end-(uintptr_t)g_rdram)<0x800000)) {
         if(((start-(uintptr_t)g_rdram)>>12)<=page&&((end-1-(uintptr_t)g_rdram)>>12)>=page) {
           if((((start-(uintptr_t)g_rdram)>>12)&2047)<first) first=((start-(uintptr_t)g_rdram)>>12)&2047;
           if((((end-1-(uintptr_t)g_rdram)>>12)&2047)>last) last=((end-1-(uintptr_t)g_rdram)>>12)&2047;
         }
       }
-      if(page<2048&&(signed int)start>=(signed int)0xC0000000&&(signed int)end>=(signed int)0xC0000000) {
-        if(((start+memory_map[start>>12]-(uintptr_t)g_rdram)>>12)<=page&&((end-1+memory_map[(end-1)>>12]-(uintptr_t)g_rdram)>>12)>=page) {
-          if((((start+memory_map[start>>12]-(uintptr_t)g_rdram)>>12)&2047)<first) first=((start+memory_map[start>>12]-(uintptr_t)g_rdram)>>12)&2047;
-          if((((end-1+memory_map[(end-1)>>12]-(uintptr_t)g_rdram)>>12)&2047)>last) last=((end-1+memory_map[(end-1)>>12]-(uintptr_t)g_rdram)>>12)&2047;
-        }
-      }*/
     }
     head=head->next;
   }
@@ -1389,7 +1378,7 @@ void clean_blocks(u_int page)
             }
           }
           if((signed int)head->vaddr>=(signed int)0xC0000000) {
-            uintptr_t addr = (head->vaddr+(memory_map[head->vaddr>>12]<<2));
+            uintptr_t addr = (head->vaddr+(uintptr_t)(memory_map[head->vaddr>>12]<<2));
             //DebugMessage(M64MSG_VERBOSE, "addr=%x start=%x end=%x",addr,start,end);
             if(addr<start||addr>=end) inv=1;
           }
@@ -7839,7 +7828,7 @@ int new_recompile_block(int addr)
     //if(tlb_LUT_r[start>>12])
       //source = (u_int *)(((intptr_t)g_rdram)+(tlb_LUT_r[start>>12]&0xFFFFF000)+(((int)addr)&0xFFF)-0x80000000);
     if((intptr_t)memory_map[start>>12]>=0) {
-      source = (u_int *)((uintptr_t)(start+(memory_map[start>>12]<<2)));
+      source = (u_int *)((uintptr_t)(start+(uintptr_t)(memory_map[start>>12]<<2)));
       pagelimit=(start+4096)&0xFFFFF000;
       intptr_t map=memory_map[start>>12];
       int i;
@@ -7848,7 +7837,7 @@ int new_recompile_block(int addr)
         if((map&~WRITE_PROTECT)==(memory_map[pagelimit>>12]&~WRITE_PROTECT)) pagelimit+=4096;
       }
       assem_debug("pagelimit=%x",pagelimit);
-      assem_debug("mapping=%x (%x)",memory_map[start>>12],(memory_map[start>>12]<<2)+start);
+      assem_debug("mapping=%x (%x)",memory_map[start>>12],(uintptr_t)(memory_map[start>>12]<<2)+start);
     }
     else {
       assem_debug("Compile at unmapped memory address: %x ", (int)addr);
@@ -11038,7 +11027,7 @@ int new_recompile_block(int addr)
     memory_map[i]|=WRITE_PROTECT;
     if((signed int)start>=(signed int)0xC0000000) {
       assert(using_tlb);
-      j=(((uintptr_t)i<<12)+(memory_map[i]<<2)-(uintptr_t)g_rdram+(uintptr_t)0x80000000)>>12;
+      j=(((uintptr_t)i<<12)+(uintptr_t)(memory_map[i]<<2)-(uintptr_t)g_rdram+(uintptr_t)0x80000000)>>12;
       invalid_code[j]=0;
       memory_map[j]|=WRITE_PROTECT;
       //DebugMessage(M64MSG_VERBOSE, "write protect physical page: %x (virtual %x)",j<<12,start);
@@ -11152,7 +11141,7 @@ void TLBWI_new(void)
       }
       else memory_map[i]=-1;
     }
-    //DebugMessage(M64MSG_VERBOSE, "memory_map[%x]: %8x (+%8x)",i,memory_map[i],memory_map[i]<<2);
+    //DebugMessage(M64MSG_VERBOSE, "memory_map[%x]: %8x (+%8x)",i,memory_map[i],(uintptr_t)memory_map[i]<<2);
   }
   for (i=tlb_e[g_cp0_regs[CP0_INDEX_REG]&0x3F].start_odd>>12; i<=tlb_e[g_cp0_regs[CP0_INDEX_REG]&0x3F].end_odd>>12; i++)
   {
@@ -11176,7 +11165,7 @@ void TLBWI_new(void)
       }
       else memory_map[i]=-1;
     }
-    //DebugMessage(M64MSG_VERBOSE, "memory_map[%x]: %8x (+%8x)",i,memory_map[i],memory_map[i]<<2);
+    //DebugMessage(M64MSG_VERBOSE, "memory_map[%x]: %8x (+%8x)",i,memory_map[i],(uintptr_t)memory_map[i]<<2);
   }
 }
 
@@ -11230,7 +11219,7 @@ void TLBWR_new(void)
       }
       else memory_map[i]=-1;
     }
-    //DebugMessage(M64MSG_VERBOSE, "memory_map[%x]: %8x (+%8x)",i,memory_map[i],memory_map[i]<<2);
+    //DebugMessage(M64MSG_VERBOSE, "memory_map[%x]: %8x (+%8x)",i,memory_map[i],(uintptr_t)memory_map[i]<<2);
   }
   for (i=tlb_e[g_cp0_regs[CP0_RANDOM_REG]&0x3F].start_odd>>12; i<=tlb_e[g_cp0_regs[CP0_RANDOM_REG]&0x3F].end_odd>>12; i++)
   {
@@ -11254,6 +11243,6 @@ void TLBWR_new(void)
       }
       else memory_map[i]=-1;
     }
-    //DebugMessage(M64MSG_VERBOSE, "memory_map[%x]: %8x (+%8x)",i,memory_map[i],memory_map[i]<<2);
+    //DebugMessage(M64MSG_VERBOSE, "memory_map[%x]: %8x (+%8x)",i,memory_map[i],(uintptr_t)memory_map[i]<<2);
   }
 }

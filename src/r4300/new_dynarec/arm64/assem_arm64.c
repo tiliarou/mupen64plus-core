@@ -596,11 +596,11 @@ static int verify_dirty(void *addr)
   assert(verifier==(uintptr_t)verify_code||verifier==(uintptr_t)verify_code_vm||verifier==(uintptr_t)verify_code_ds);
 
   if(verifier==(uintptr_t)verify_code_vm||verifier==(uintptr_t)verify_code_ds) {
-    //TOBETESTED
-    assert(0);
     unsigned int page=(u_int)source>>12;
     uint64_t map_value=memory_map[page];
-    if(map_value>=0x80000000) return 0; //TOBEDONE: Why 0x80000000?
+    if(map_value>=((uintptr_t)1<<((sizeof(uintptr_t)<<3)-1))) { /*mapping=-1?*/
+      return 0;
+    }
     while(page<(((u_int)source+len-1)>>12)) {
       if((memory_map[++page]<<2)!=(map_value<<2)) return 0;
     }
@@ -667,9 +667,9 @@ static void get_bounds(intptr_t addr,uintptr_t *start,uintptr_t *end)
   assert(verifier==(uintptr_t)verify_code||verifier==(uintptr_t)verify_code_vm||verifier==(uintptr_t)verify_code_ds);
 
   if(verifier==(uintptr_t)verify_code_vm||verifier==(uintptr_t)verify_code_ds) {
-    //TOBETESTED
-    assert(0);
-    if(memory_map[source>>12]>=0x80000000) source=0;  //TOBEDONE: Why 0x80000000?
+    if(memory_map[source>>12]>=((uintptr_t)1<<((sizeof(uintptr_t)<<3)-1))) { /*mapping=-1?*/
+      source=0;
+    }
     else source+=(memory_map[source>>12]<<2);
   }
   *start=source;
@@ -4062,8 +4062,6 @@ static intptr_t do_dirty_stub(int i)
   if((int)start<(int)0xC0000000){
     emit_read_ptr((intptr_t)source,1);
   }else{
-    //TOBETESTED
-    assert(0);
     emit_movz_lsl16(((u_int)start>>16)&0xffff,1);
     emit_movk(((u_int)start)&0xffff,1);
   }
