@@ -27,6 +27,7 @@ void profiler_init(void);
 void profiler_cleanup(void);
 void profiler_block(int addr);
 void set_tlb(void);
+void copy_mapping(void * map);
 #else
 
 #include <capstone.h>
@@ -105,7 +106,8 @@ typedef struct
   uint64_t ram_offset;
   uint64_t mini_ht[32][2];
   u_char restore_candidate[512];
-  uint64_t memory_map[1048576];
+  int64_t reg_debug[32];
+  /*uint64_t*/u_int memory_map[1048576];
 }profiler_t;
 
 ALIGN(4096, static profiler_t profiler);
@@ -140,6 +142,7 @@ ALIGN(4096, static profiler_t profiler);
 #define ram_offset                         profiler.ram_offset
 #define mini_ht                            profiler.mini_ht
 #define restore_candidate                  profiler.restore_candidate
+#define reg_debug                          profiler.reg_debug
 #define memory_map                         profiler.memory_map
 #define jump_vaddr_x0                      profiler_jump_vaddr_x0 
 #define jump_vaddr_x1                      profiler_jump_vaddr_x1

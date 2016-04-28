@@ -4222,6 +4222,13 @@ static void generate_map_const(u_int addr,int tr) {
   emit_movimm((addr>>12)+(((uintptr_t)memory_map-(uintptr_t)&dynarec_local)>>3),tr);
 }
 
+static void do_print_pc(int prog_cpt) {
+  save_regs(0x7ffff);
+  emit_movimm(prog_cpt,0);
+  emit_call((intptr_t)print_pc);
+  restore_regs(0x7ffff);
+}
+
 /* Special assem */
 static void shift_assemble_arm64(int i,struct regstat *i_regs)
 {

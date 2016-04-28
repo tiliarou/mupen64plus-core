@@ -27,6 +27,7 @@ void profiler_init(void);
 void profiler_cleanup(void);
 void profiler_block(int addr);
 void set_tlb(void);
+void copy_mapping(void * map);
 #else
 
 #include <capstone.h>
@@ -49,6 +50,7 @@ void set_tlb(void);
 #define readmem_dword                      profiler_readmem_dword
 #define memory_map                         profiler_memory_map
 #define restore_candidate                  profiler_restore_candidate
+#define reg_debug                          profiler_reg_debug
 
 /* Abstract non-static functions */
 #define TLBWI_new                          profiler_TLBWI_new

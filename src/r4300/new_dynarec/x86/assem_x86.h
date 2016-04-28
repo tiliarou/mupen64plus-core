@@ -58,5 +58,6 @@ void write_rdramd_new(void);
 
 extern u_int memory_map[1048576];
 extern ALIGN(4, u_char restore_candidate[512]);
+extern int64_t reg_debug[32];
 
 #endif /* M64P_R4300_ASSEM_X86_H */

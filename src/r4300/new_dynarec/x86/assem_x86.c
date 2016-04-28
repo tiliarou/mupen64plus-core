@@ -26,6 +26,7 @@ int branch_target;
 uint64_t readmem_dword;
 u_int memory_map[1048576];
 ALIGN(4, u_char restore_candidate[512]);
+int64_t reg_debug[32];
 
 ALIGN(8, static u_int mini_ht[32][2]);
 static precomp_instr fake_pc;
@@ -3301,6 +3302,15 @@ static void gen_tlb_addr_w(int ar, int map) {
 // We don't need this for x86
 static void generate_map_const(u_int addr,int tr) {
   // void *mapaddr=memory_map+(addr>>12);
+}
+
+static void do_print_pc(int prog_cpt) {
+  emit_pusha();
+  emit_movimm(prog_cpt,EAX);
+  emit_pushreg(EAX);
+  emit_call((intptr_t)print_pc);
+  emit_popreg(EAX);
+  emit_popa();
 }
 
 /* Special assem */

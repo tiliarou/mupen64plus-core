@@ -270,7 +270,9 @@ static void nullf() {}
 #ifdef NEW_DYNAREC_DEBUG
 #undef USE_MINI_HT
 #define DEBUG_CYCLE_COUNT
+#define DEBUG_BLOCK (0) /*(addr==0x80000000)*/
 static FILE * pDebugFile=NULL;
+static FILE * pDisasmFile=NULL;
 static int rdram_checksum(void)
 {
   int i;
@@ -330,20 +332,32 @@ static void print_debug_info(u_int vaddr)
   /*int i;
   if(gpr_sum!=0){
     for(i=0;i<32;i++)
-      printf(pDebugFile, "r%d:%.8x%.8x\n",i,((int *)(reg+i))[1],((int *)(reg+i))[0]);
+      fprintf(pDebugFile, "r%d:%.8x%.8x\n",i,((int *)(reg+i))[1],((int *)(reg+i))[0]);
   }
   if(fpr_sum!=0){
     for(i=0;i<32;i++)
-      printf(pDebugFile, "f%d:%.8x%.8x\n",i,((int*)reg_cop1_simple[i])[1],*((int*)reg_cop1_simple[i]));
+      fprintf(pDebugFile, "f%d:%.8x%.8x\n",i,((int*)reg_cop1_simple[i])[1],*((int*)reg_cop1_simple[i]));
   }
   if(cop0_sum!=0){
     for(i=0;i<32;i++)
-      printf(pDebugFile, "cop0%d:%.8x\n",i,g_cp0_regs[i]);
+      fprintf(pDebugFile, "cop0%d:%.8x\n",i,g_cp0_regs[i]);
   }*/
   fprintf(pDebugFile, "hi:%.8x%.8x, lo:%.8x%.8x\n",(int)(hi>>32),(int)hi,(int)(lo>>32),(int)lo);
   fprintf(pDebugFile, "FCR31:%.8x, FCR0:%.8x\n",FCR31,FCR0);
   fprintf(pDebugFile, "count:%.8x, next:%.8x\n\n",g_cp0_regs[CP0_COUNT_REG],next_interupt);
   fflush(pDebugFile);
+}
+
+static void print_pc(int vaddr)
+{
+  if(pDebugFile == NULL)
+    return;
+
+  fprintf(pDebugFile, "PC:%.8x\n",vaddr);
+
+  int i;
+  for(i=0;i<32;i++)
+    fprintf(pDebugFile, "r%d:%.8x%.8x\n",i,((int *)(reg_debug+i))[1],((int *)(reg_debug+i))[0]);
 }
 #endif
 
@@ -7575,81 +7589,81 @@ static void clean_registers(int istart,int iend,int wr)
   }
 }
 
-#ifdef ASSEM_DEBUG
+#ifdef NEW_DYNAREC_DEBUG
   /* disassembly */
 static void disassemble_inst(int i)
 {
-    if (bt[i]) DebugMessage(M64MSG_VERBOSE, "*"); else DebugMessage(M64MSG_VERBOSE, " ");
+    if (bt[i]) fprintf(pDisasmFile,"*"); else fprintf(pDisasmFile," ");
     switch(itype[i]) {
       case UJUMP:
-        printf (" %x: %s %8x",start+i*4,insn[i],ba[i]);break;
+        fprintf(pDisasmFile," %x: %s %8x",start+i*4,insn[i],ba[i]);break;
       case CJUMP:
-        printf (" %x: %s r%d,r%d,%8x",start+i*4,insn[i],rs1[i],rs2[i],i?start+i*4+4+((signed int)((unsigned int)source[i]<<16)>>14):*ba);break;
+        fprintf(pDisasmFile," %x: %s r%d,r%d,%8x",start+i*4,insn[i],rs1[i],rs2[i],i?start+i*4+4+((signed int)((unsigned int)source[i]<<16)>>14):*ba);break;
       case SJUMP:
-        printf (" %x: %s r%d,%8x",start+i*4,insn[i],rs1[i],start+i*4+4+((signed int)((unsigned int)source[i]<<16)>>14));break;
+        fprintf(pDisasmFile," %x: %s r%d,%8x",start+i*4,insn[i],rs1[i],start+i*4+4+((signed int)((unsigned int)source[i]<<16)>>14));break;
       case FJUMP:
-        printf (" %x: %s %8x",start+i*4,insn[i],ba[i]);break;
+        fprintf(pDisasmFile," %x: %s %8x",start+i*4,insn[i],ba[i]);break;
       case RJUMP:
         if ((opcode2[i]&1)&&rt1[i]!=31)
-          printf (" %x: %s r%d,r%d",start+i*4,insn[i],rt1[i],rs1[i]);
+          fprintf(pDisasmFile," %x: %s r%d,r%d",start+i*4,insn[i],rt1[i],rs1[i]);
         else
-          printf (" %x: %s r%d",start+i*4,insn[i],rs1[i]);
+          fprintf(pDisasmFile," %x: %s r%d",start+i*4,insn[i],rs1[i]);
         break;
       case SPAN:
-        printf (" %x: %s (pagespan) r%d,r%d,%8x",start+i*4,insn[i],rs1[i],rs2[i],ba[i]);break;
+        fprintf(pDisasmFile," %x: %s (pagespan) r%d,r%d,%8x",start+i*4,insn[i],rs1[i],rs2[i],ba[i]);break;
       case IMM16:
         if(opcode[i]==0xf) //LUI
-          printf (" %x: %s r%d,%4x0000",start+i*4,insn[i],rt1[i],imm[i]&0xffff);
+          fprintf(pDisasmFile," %x: %s r%d,%4x0000",start+i*4,insn[i],rt1[i],imm[i]&0xffff);
         else
-          printf (" %x: %s r%d,r%d,%d",start+i*4,insn[i],rt1[i],rs1[i],imm[i]);
+          fprintf(pDisasmFile," %x: %s r%d,r%d,%d",start+i*4,insn[i],rt1[i],rs1[i],imm[i]);
         break;
       case LOAD:
       case LOADLR:
-        printf (" %x: %s r%d,r%d+%x",start+i*4,insn[i],rt1[i],rs1[i],imm[i]);
+        fprintf(pDisasmFile," %x: %s r%d,r%d+%x",start+i*4,insn[i],rt1[i],rs1[i],imm[i]);
         break;
       case STORE:
       case STORELR:
-        printf (" %x: %s r%d,r%d+%x",start+i*4,insn[i],rs2[i],rs1[i],imm[i]);
+        fprintf(pDisasmFile," %x: %s r%d,r%d+%x",start+i*4,insn[i],rs2[i],rs1[i],imm[i]);
         break;
       case ALU:
       case SHIFT:
-        printf (" %x: %s r%d,r%d,r%d",start+i*4,insn[i],rt1[i],rs1[i],rs2[i]);
+        fprintf(pDisasmFile," %x: %s r%d,r%d,r%d",start+i*4,insn[i],rt1[i],rs1[i],rs2[i]);
         break;
       case MULTDIV:
-        printf (" %x: %s r%d,r%d",start+i*4,insn[i],rs1[i],rs2[i]);
+        fprintf(pDisasmFile," %x: %s r%d,r%d",start+i*4,insn[i],rs1[i],rs2[i]);
         break;
       case SHIFTIMM:
-        printf (" %x: %s r%d,r%d,%d",start+i*4,insn[i],rt1[i],rs1[i],imm[i]);
+        fprintf(pDisasmFile," %x: %s r%d,r%d,%d",start+i*4,insn[i],rt1[i],rs1[i],imm[i]);
         break;
       case MOV:
         if((opcode2[i]&0x1d)==0x10)
-          printf (" %x: %s r%d",start+i*4,insn[i],rt1[i]);
+          fprintf(pDisasmFile," %x: %s r%d",start+i*4,insn[i],rt1[i]);
         else if((opcode2[i]&0x1d)==0x11)
-          printf (" %x: %s r%d",start+i*4,insn[i],rs1[i]);
+          fprintf(pDisasmFile," %x: %s r%d",start+i*4,insn[i],rs1[i]);
         else
-          printf (" %x: %s",start+i*4,insn[i]);
+          fprintf(pDisasmFile," %x: %s",start+i*4,insn[i]);
         break;
       case COP0:
         if(opcode2[i]==0)
-          printf (" %x: %s r%d,cpr0[%d]",start+i*4,insn[i],rt1[i],(source[i]>>11)&0x1f); // MFC0
+          fprintf(pDisasmFile," %x: %s r%d,cpr0[%d]",start+i*4,insn[i],rt1[i],(source[i]>>11)&0x1f); // MFC0
         else if(opcode2[i]==4)
-          printf (" %x: %s r%d,cpr0[%d]",start+i*4,insn[i],rs1[i],(source[i]>>11)&0x1f); // MTC0
-        else printf (" %x: %s",start+i*4,insn[i]);
+          fprintf(pDisasmFile," %x: %s r%d,cpr0[%d]",start+i*4,insn[i],rs1[i],(source[i]>>11)&0x1f); // MTC0
+        else fprintf(pDisasmFile," %x: %s",start+i*4,insn[i]);
         break;
       case COP1:
         if(opcode2[i]<3)
-          printf (" %x: %s r%d,cpr1[%d]",start+i*4,insn[i],rt1[i],(source[i]>>11)&0x1f); // MFC1
+          fprintf(pDisasmFile," %x: %s r%d,cpr1[%d]",start+i*4,insn[i],rt1[i],(source[i]>>11)&0x1f); // MFC1
         else if(opcode2[i]>3)
-          printf (" %x: %s r%d,cpr1[%d]",start+i*4,insn[i],rs1[i],(source[i]>>11)&0x1f); // MTC1
-        else printf (" %x: %s",start+i*4,insn[i]);
+          fprintf(pDisasmFile," %x: %s r%d,cpr1[%d]",start+i*4,insn[i],rs1[i],(source[i]>>11)&0x1f); // MTC1
+        else fprintf(pDisasmFile," %x: %s",start+i*4,insn[i]);
         break;
       case C1LS:
-        printf (" %x: %s cpr1[%d],r%d+%x",start+i*4,insn[i],(source[i]>>16)&0x1f,rs1[i],imm[i]);
+        fprintf(pDisasmFile," %x: %s cpr1[%d],r%d+%x",start+i*4,insn[i],(source[i]>>16)&0x1f,rs1[i],imm[i]);
         break;
       default:
-        //printf (" %s %8x",insn[i],source[i]);
-        printf (" %x: %s",start+i*4,insn[i]);
+        fprintf(pDisasmFile," %x: %s",start+i*4,insn[i]);
     }
+    fprintf(pDisasmFile,"\n");
 }
 #endif
 
@@ -7657,6 +7671,7 @@ void new_dynarec_init(void)
 {
 #ifdef NEW_DYNAREC_DEBUG
   pDebugFile = fopen("new_dynarec_debug.txt","w");
+  pDisasmFile = fopen("new_dynarec_disasm.txt","w");
 #endif
 #if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
   profiler_init();
@@ -7743,6 +7758,7 @@ void new_dynarec_cleanup(void)
 {
 #ifdef NEW_DYNAREC_DEBUG
   fclose(pDebugFile);
+  fclose(pDisasmFile);
 #endif
 #if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
   profiler_cleanup();
@@ -7764,6 +7780,7 @@ void new_dynarec_cleanup(void)
 int new_recompile_block(int addr)
 {
 #if defined(NEW_DYNAREC_PROFILER) && !defined(PROFILER)
+  copy_mapping(&memory_map);
   profiler_block(addr);
 #endif
   assem_debug("NOTCOMPILED: addr = %x -> %x", (int)addr, (int)out);
@@ -10676,11 +10693,24 @@ int new_recompile_block(int addr)
   }
   for(i=0;i<slen;i++)
   {
-    //if(ds) DebugMessage(M64MSG_VERBOSE, "ds: ");
-//    if((void*)assem_debug==(void*)printf) disassemble_inst(i);
-#if defined( ASSEM_DEBUG )
+
+#ifdef NEW_DYNAREC_DEBUG
+  if(DEBUG_BLOCK) {
+    if(i>0) {
+      int hr;
+      for(hr=0; hr<HOST_REGS; hr++) {
+        int r=regs[i-1].regmap[hr];
+        if(((r&63)>=0)&&((r&63)<32)) {
+          intptr_t addr=((intptr_t)reg_debug)+((r&63)<<3)+((r&64)>>4);
+          emit_writeword(hr,addr);
+        }
+      }
+    }
     disassemble_inst(i);
+    do_print_pc(start+i*4);
+  }
 #endif
+
     if(ds) {
       ds=0; // Skip delay slot
       if(bt[i]) assem_debug("OOPS - branch into delay slot");
