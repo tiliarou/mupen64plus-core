@@ -25,7 +25,8 @@
 
 #include "new_dynarec_64.c"
 
-#define DISASM_BLOCK (0) /*(addr==0x80000000)*/
+#define DISASM_BLOCK 0
+static int disasm_block[]={DISASM_BLOCK};
 
 typedef struct{
   intptr_t addr;
@@ -349,7 +350,18 @@ void profiler_block(int addr)
   //  }
   //}
 
-  if(!DISASM_BLOCK) return;
+  int debug=0;
+  int block, inst;
+  for(block=0;block<(sizeof(disasm_block)>>2);block++) {
+    for(inst=0;inst<slen;inst++) {
+      if((start+inst*4)==disasm_block[block]) {
+        debug=1;
+        break;
+      }
+    }
+  }
+
+  if(!debug) return;
   if(handle == 0) return;
 
   sprintf(filename, "%.8x.txt", addr);

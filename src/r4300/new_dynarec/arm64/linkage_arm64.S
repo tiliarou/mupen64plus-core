@@ -74,11 +74,13 @@ BSS_SECTION
     GLOBAL_VARIABLE(ram_offset, 8)
     GLOBAL_VARIABLE(mini_ht, 512)
     GLOBAL_VARIABLE(restore_candidate, 512)
-	GLOBAL_VARIABLE(reg_debug, 256)
+    GLOBAL_VARIABLE(instr_addr, 4)
+    GLOBAL_VARIABLE(link_register, 8)
+    GLOBAL_VARIABLE(reg_debug, 256)
     GLOBAL_VARIABLE(memory_map, 8388608)
 
 extra_memory:
-    .space    33554432+256+4+4+4+4+4+4+8+8+8+8+4+2+4+4+4+256+8+8+128+256+256+16+8+8+208+8+512+512+256+8388608
+    .space    33554432+256+4+4+4+4+4+4+8+8+8+8+4+2+4+4+4+256+8+8+128+256+256+16+8+8+208+8+512+512+8+8+256+8388608
 
     dynarec_local     = extra_memory      + 33554432
     next_interupt     = dynarec_local     + 256
@@ -89,7 +91,7 @@ extra_memory:
     stop              = pcaddr            + 4
     invc_ptr          = stop              + 4
     address           = invc_ptr          + 8
-    readmem_dword     = address           + 8 /* 4 byte free */
+    readmem_dword     = address           + 8 /* 4 bytes free */
     cpu_dword         = readmem_dword     + 8
     cpu_word          = cpu_dword         + 8
     cpu_hword         = cpu_word          + 4
@@ -104,12 +106,14 @@ extra_memory:
     reg_cop1_double   = reg_cop1_simple   + 256
     rounding_modes    = reg_cop1_double   + 256
     branch_target     = rounding_modes    + 16
-    PC                = branch_target     + 8 /* 4 byte free */
+    PC                = branch_target     + 8 /* 4 bytes free */
     fake_pc           = PC                + 8
     ram_offset        = fake_pc           + 208
     mini_ht           = ram_offset        + 8
     restore_candidate = mini_ht           + 512
-	reg_debug         = restore_candidate + 512
+    instr_addr        = restore_candidate + 512
+    link_register     = instr_addr        + 8 /* 4 bytes free */
+    reg_debug         = link_register     + 8
     memory_map        = reg_debug         + 256
 
 END_SECTION
@@ -733,11 +737,11 @@ GLOBAL_FUNCTION(read_nomemd_new):
     
 GLOBAL_FUNCTION(write_nomem_new):
     /* w3 = instr addr/flags */
-    mov    w19, w3
-    mov    x20, x30
+    str    w3, [x29, #instr_addr-dynarec_local]
+    str    x30, [x29, #link_register-dynarec_local]
     bl     do_invalidate
-    mov    w3, w19
-    mov    x30, x20
+    ldr    w3, [x29, #instr_addr-dynarec_local]
+    ldr    x30, [x29, #link_register-dynarec_local]
     ldr    w2, [x29, #address-dynarec_local]
     add    x4, x29, #memory_map-dynarec_local
     lsr    w0, w2, #12
@@ -751,11 +755,11 @@ GLOBAL_FUNCTION(write_nomem_new):
     
 GLOBAL_FUNCTION(write_nomemb_new):
     /* w3 = instr addr/flags */
-    mov    w19, w3
-    mov    x20, x30
+    str    w3, [x29, #instr_addr-dynarec_local]
+    str    x30, [x29, #link_register-dynarec_local]
     bl     do_invalidate
-    mov    w3, w19
-    mov    x30, x20
+    ldr    w3, [x29, #instr_addr-dynarec_local]
+    ldr    x30, [x29, #link_register-dynarec_local]
     ldr    w2, [x29, #address-dynarec_local]
     add    x4, x29, #memory_map-dynarec_local
     lsr    w0, w2, #12
@@ -771,11 +775,11 @@ GLOBAL_FUNCTION(write_nomemb_new):
     
 GLOBAL_FUNCTION(write_nomemh_new):
     /* w3 = instr addr/flags */
-    mov    w19, w3
-    mov    x20, x30
+    str    w3, [x29, #instr_addr-dynarec_local]
+    str    x30, [x29, #link_register-dynarec_local]
     bl     do_invalidate
-    mov    w3, w19
-    mov    x30, x20
+    ldr    w3, [x29, #instr_addr-dynarec_local]
+    ldr    x30, [x29, #link_register-dynarec_local]
     ldr    w2, [x29, #address-dynarec_local]
     add    x4, x29, #memory_map-dynarec_local
     lsr    w0, w2, #12
@@ -791,11 +795,11 @@ GLOBAL_FUNCTION(write_nomemh_new):
     
 GLOBAL_FUNCTION(write_nomemd_new):
     /* w3 = instr addr/flags */
-    mov    w19, w3
-    mov    x20, x30
+    str    w3, [x29, #instr_addr-dynarec_local]
+    str    x30, [x29, #link_register-dynarec_local]
     bl     do_invalidate
-    mov    w3, w19
-    mov    x30, x20
+    ldr    w3, [x29, #instr_addr-dynarec_local]
+    ldr    x30, [x29, #link_register-dynarec_local]
     ldr    w2, [x29, #address-dynarec_local]
     add    x4, x29, #memory_map-dynarec_local
     lsr    w0, w2, #12

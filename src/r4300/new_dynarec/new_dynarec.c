@@ -270,9 +270,11 @@ static void nullf() {}
 #ifdef NEW_DYNAREC_DEBUG
 #undef USE_MINI_HT
 #define DEBUG_CYCLE_COUNT
-#define DEBUG_BLOCK (0) /*(addr==0x80000000)*/
+#define DEBUG_BLOCK 0
+//#define DEBUG_INSTRUCTION
 static FILE * pDebugFile=NULL;
 static FILE * pDisasmFile=NULL;
+static int debug_block[]={DEBUG_BLOCK};
 static int rdram_checksum(void)
 {
   int i;
@@ -355,9 +357,11 @@ static void print_pc(int vaddr)
 
   fprintf(pDebugFile, "PC:%.8x\n",vaddr);
 
+#ifdef DEBUG_INSTRUCTION
   int i;
   for(i=0;i<32;i++)
     fprintf(pDebugFile, "r%d:%.8x%.8x\n",i,((int *)(reg_debug+i))[1],((int *)(reg_debug+i))[0]);
+#endif
 }
 #endif
 
@@ -7664,6 +7668,7 @@ static void disassemble_inst(int i)
         fprintf(pDisasmFile," %x: %s",start+i*4,insn[i]);
     }
     fprintf(pDisasmFile,"\n");
+    fflush(pDisasmFile);
 }
 #endif
 
@@ -10691,11 +10696,25 @@ int new_recompile_block(int addr)
     ds=1;
     pagespan_ds();
   }
-  for(i=0;i<slen;i++)
-  {
 
 #ifdef NEW_DYNAREC_DEBUG
-  if(DEBUG_BLOCK) {
+  int debug=0;
+  int block, inst;
+  for(block=0;block<(sizeof(debug_block)>>2);block++) {
+    for(inst=0;inst<slen;inst++) {
+      if((start+inst*4)==debug_block[block]) {
+        debug=1;
+        break;
+      }
+    }
+  }
+#endif
+
+  for(i=0;i<slen;i++)
+  {
+#ifdef NEW_DYNAREC_DEBUG
+  if(debug) {
+#ifdef DEBUG_INSTRUCTION
     if(i>0) {
       int hr;
       for(hr=0; hr<HOST_REGS; hr++) {
@@ -10706,6 +10725,7 @@ int new_recompile_block(int addr)
         }
       }
     }
+#endif
     disassemble_inst(i);
     do_print_pc(start+i*4);
   }
