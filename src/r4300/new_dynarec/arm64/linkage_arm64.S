@@ -298,7 +298,7 @@ GLOBAL_FUNCTION(jump_vaddr):
     br     x1*/
     
 GLOBAL_FUNCTION(verify_code_ds):
-    brk 0
+    str    w19, [x29, #branch_target-dynarec_local]
     
 GLOBAL_FUNCTION(verify_code_vm):
     /* w0 = instruction pointer (virtual address) */
