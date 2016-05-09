@@ -1975,40 +1975,6 @@ static void emit_rorimm(int rs,u_int imm,int rt)
   output_w32(0x13800000|rs<<16|imm<<10|rs<<5|rt);
 }
 
-static void emit_shldimm(int rs,int rs2,u_int imm,int rt)
-{
-  //TOBEDONE
-  assert(0);
-  /*assert(rs!=29);
-  assert(rs2!=29);
-  assert(rt!=29);
-  assem_debug("shld %%%s,%%%s,%d",regname[rt],regname[rs2],imm);
-  assert(imm>0);
-  assert(imm<32);
-  //if(imm==1) ...
-  assem_debug("lsl %s,%s,#%d",regname[rt],regname[rs],imm);
-  output_w32(0xe1a00000|rd_rn_rm(rt,0,rs)|(imm<<7));
-  assem_debug("orr %s,%s,%s,lsr #%d",regname[rt],regname[rt],regname[rs2],32-imm);
-  output_w32(0xe1800020|rd_rn_rm(rt,rt,rs2)|((32-imm)<<7));*/
-}
-
-static void emit_shrdimm(int rs,int rs2,u_int imm,int rt)
-{
-  //TOBEDONE
-  assert(0);
-  /*assert(rs!=29);
-  assert(rs2!=29);
-  assert(rt!=29);
-  assem_debug("shrd %%%s,%%%s,%d",regname[rt],regname[rs2],imm);
-  assert(imm>0);
-  assert(imm<32);
-  //if(imm==1) ...
-  assem_debug("lsr %s,%s,#%d",regname[rt],regname[rs],imm);
-  output_w32(0xe1a00020|rd_rn_rm(rt,0,rs)|(imm<<7));
-  assem_debug("orr %s,%s,%s,lsl #%d",regname[rt],regname[rt],regname[rs2],32-imm);
-  output_w32(0xe1800000|rd_rn_rm(rt,rt,rs2)|((32-imm)<<7));*/
-}
-
 static void emit_shl(u_int rs,u_int shift,u_int rt)
 {
   assert(rs!=29);
@@ -2062,6 +2028,32 @@ static void emit_orrshr(u_int rs,u_int shift,u_int rt)
   assert(shift<32);
   assem_debug("orr %s,%s,%s,lsr %d",regname[rt],regname[rt],regname[rs],shift);
   output_w32(0x2a400000|rs<<16|shift<<10|rt<<5|rt);
+}
+
+static void emit_shldimm(int rs,int rs2,u_int imm,int rt)
+{
+  assert(rs!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  assem_debug("shld %%%s,%%%s,%d",regname[rt],regname[rs2],imm);
+  assert(imm>0);
+  assert(imm<32);
+  //if(imm==1) ...
+  emit_shlimm(rs,imm,rt);
+  emit_orrshr(rs2,32-imm,rt);
+}
+
+static void emit_shrdimm(int rs,int rs2,u_int imm,int rt)
+{
+  assert(rs!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  assem_debug("shrd %%%s,%%%s,%d",regname[rt],regname[rs2],imm);
+  assert(imm>0);
+  assert(imm<32);
+  //if(imm==1) ...
+  emit_shrimm(rs,imm,rt);
+  emit_orrshl(rs2,32-imm,rt);
 }
 
 static void emit_cmpimm(int rs,int imm)
