@@ -402,7 +402,7 @@ static void *dynamic_linker(void * src, u_int vaddr)
 
 static void *dynamic_linker_ds(void * src, u_int vaddr)
 {
-  //TOBETESTED
+  //TOBEDONE: Find test case
   assert(0);
   u_int page=(vaddr^0x80000000)>>12;
   u_int vpage=page;
@@ -1868,7 +1868,7 @@ static void emit_rscimm(int rs,int imm,u_int rt)
 
 static void emit_addimm64_32(int rsh,int rsl,int imm,int rth,int rtl)
 {
-  //TOBETESTED
+  //TOBEDONE
   assert(0);
   assert(rsh!=29);
   assert(rsl!=29);
@@ -1906,10 +1906,14 @@ static void emit_andimm(int rs,int imm,int rt)
   }
 }
 
-static void emit_andimm64(int rs,int imm,int rt)
+static void emit_andimm64(int rs,int64_t imm,int rt)
 {
-  //TOBEDONE
-  assert(0);
+  assert(rs!=29);
+  assert(rt!=29);
+  u_int armval;
+  assert(genimm((uint64_t)imm,64,&armval));
+  assem_debug("and %s,%s,#%d",regname64[rt],regname64[rs],imm);
+  output_w32(0x92000000|armval<<10|rs<<5|rt);
 }
 
 static void emit_orimm(int rs,int imm,int rt)
@@ -2073,13 +2077,11 @@ static void emit_sar(u_int rs,u_int shift,u_int rt)
 
 static void emit_orrshl(u_int rs,u_int shift,u_int rt)
 {
-  //TOBEDONE
-  assert(0);
-  /*assert(rs!=29);
+  assert(rs!=29);
   assert(rt!=29);
-  assert(shift!=29);
-  assem_debug("orr %s,%s,%s,lsl %s",regname[rt],regname[rt],regname[rs],regname[shift]);
-  output_w32(0xe1800000|rd_rn_rm(rt,rt,rs)|0x10|(shift<<8));*/
+  assert(shift<32);
+  assem_debug("orr %s,%s,%s,lsl %d",regname[rt],regname[rt],regname[rs],shift);
+  output_w32(0x2a000000|rs<<16|shift<<10|rt<<5|rt);
 }
 
 static void emit_orrshl64(u_int rs,u_int shift,u_int rt)
@@ -2093,13 +2095,11 @@ static void emit_orrshl64(u_int rs,u_int shift,u_int rt)
 
 static void emit_orrshr(u_int rs,u_int shift,u_int rt)
 {
-  //TOBEDONE
-  assert(0);
-  /*assert(rs!=29);
+  assert(rs!=29);
   assert(rt!=29);
-  assert(shift!=29);
-  assem_debug("orr %s,%s,%s,lsr %s",regname[rt],regname[rt],regname[rs],regname[shift]);
-  output_w32(0xe1800000|rd_rn_rm(rt,rt,rs)|0x30|(shift<<8));*/
+  assert(shift<32);
+  assem_debug("orr %s,%s,%s,lsr %d",regname[rt],regname[rt],regname[rs],shift);
+  output_w32(0x2a400000|rs<<16|shift<<10|rt<<5|rt);
 }
 
 static void emit_cmpimm(int rs,int imm)
@@ -2344,8 +2344,6 @@ static void emit_set_nz32(int rs, int rt)
 
 static void emit_set_gz64_32(int rsh, int rsl, int rt)
 {
-  //TOBETESTED
-  assert(0);
   assert(rsh!=29);
   assert(rsl!=29);
   assert(rt!=29);
@@ -2912,14 +2910,20 @@ static void emit_umulh(u_int rs1, u_int rs2, u_int rt)
 
 static void emit_smull(u_int rs1, u_int rs2, u_int rt)
 {
-  //TOBEDONE
-  assert(0);
+  assem_debug("smull %s, %s, %s",regname64[rt],regname[rs1],regname[rs2]);
+  assert(rs1!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  output_w32(0x9b200000|(rs2<<16)|(WZR<<10)|(rs1<<5)|rt);
 }
 
 static void emit_smulh(u_int rs1, u_int rs2, u_int rt)
 {
-  //TOBEDONE
-  assert(0);
+  assem_debug("smulh %s, %s, %s",regname64[rt],regname64[rs1],regname64[rs2]);
+  assert(rs1!=29);
+  assert(rs2!=29);
+  assert(rt!=29);
+  output_w32(0x9b400000|(rs2<<16)|(WZR<<10)|(rs1<<5)|rt);
 }
 
 static void emit_sdiv(u_int rs1,u_int rs2,u_int rt)
@@ -3431,7 +3435,7 @@ static void emit_fcmpd(int x,int y)
 
 static void emit_jno_unlikely(int a)
 {
-  //TOBETESTED
+  //TOBEDONE: Hint the branch predictor that the branch is unlikely to be taken
   emit_jno(a);
   //assem_debug("addvc pc,pc,#? (%x)",/*a-(int)out-8,*/a);
   //output_w32(0x72800000|rd_rn_rm(15,15,0));
@@ -4035,7 +4039,7 @@ static void inline_writestub(int type, int i, u_int addr, signed char regmap[], 
 
 static void do_unalignedwritestub(int n)
 {
-  //TOBETESTED
+  //TOBEDONE: Is this happening?
   set_jump_target(stubs[n][1],(intptr_t)out);
   emit_breakpoint(0);
   output_w32(0xd4000001); //SVC
@@ -4703,16 +4707,12 @@ static void loadlr_assemble_arm64(int i,struct regstat *i_regs)
       emit_movimm(-1,HOST_TEMPREG);
       if (opcode[i]==0x26) {
         emit_shr(temp2,temp,temp2);
-        //TOBETESTED
         emit_shr(HOST_TEMPREG,temp,HOST_TEMPREG);
         emit_bic(tl,HOST_TEMPREG,tl);
-        //emit_bic_lsr(tl,HOST_TEMPREG,temp,tl);
       }else{
         emit_shl(temp2,temp,temp2);
-        //TOBETESTED
         emit_shl(HOST_TEMPREG,temp,HOST_TEMPREG);
         emit_bic(tl,HOST_TEMPREG,tl);
-        //emit_bic_lsl(tl,HOST_TEMPREG,temp,tl);
       }
       emit_or(temp2,tl,tl);
     }
@@ -5168,7 +5168,6 @@ static void storelr_assemble_arm64(int i,struct regstat *i_regs)
     set_jump_target(done0,(intptr_t)out);
   }
   if(!c||!memtarget)
-    //TOBEDONE: Move this after invalid stub? (see store_assemble)
     add_stub(STORELR_STUB,jaddr,(intptr_t)out,0,(intptr_t)i_regs,rs2[i],ccadj[i],reglist);
   if(!using_tlb) {
     #ifdef RAM_OFFSET
@@ -6295,8 +6294,6 @@ static void multdiv_assemble_arm64(int i,struct regstat *i_regs)
     {
       if(opcode2[i]==0x18) // MULT
       {
-        //TOBETESTED
-        assert(0);
         signed char m1=get_reg(i_regs->regmap,rs1[i]);
         signed char m2=get_reg(i_regs->regmap,rs2[i]);
         signed char high=get_reg(i_regs->regmap,HIREG);
@@ -6358,8 +6355,6 @@ static void multdiv_assemble_arm64(int i,struct regstat *i_regs)
     {
       if(opcode2[i]==0x1C) // DMULT
       {
-        //TOBETESTED
-        assert(0);
         signed char m1h=get_reg(i_regs->regmap,rs1[i]|64);
         signed char m1l=get_reg(i_regs->regmap,rs1[i]);
         signed char m2h=get_reg(i_regs->regmap,rs2[i]|64);
