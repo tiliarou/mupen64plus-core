@@ -50,7 +50,6 @@ void copy_mapping(void * map);
 #define readmem_dword                      profiler_readmem_dword
 #define memory_map                         profiler_memory_map
 #define restore_candidate                  profiler_restore_candidate
-#define reg_debug                          profiler_reg_debug
 
 /* Abstract non-static functions */
 #define TLBWI_new                          profiler_TLBWI_new

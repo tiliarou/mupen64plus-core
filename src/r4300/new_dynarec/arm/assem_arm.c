@@ -3357,12 +3357,14 @@ static void generate_map_const(u_int addr,int tr) {
   emit_movimm((addr>>12)+(((u_int)memory_map-(u_int)&dynarec_local)>>2),tr);
 }
 
+#ifdef NEW_DYNAREC_DEBUG
 static void do_print_pc(int prog_cpt) {
   save_regs(0x100f);
   emit_movimm(prog_cpt,0);
   emit_call((intptr_t)print_pc);
   restore_regs(0x100f);
 }
+#endif
 
 /* Special assem */
 

@@ -140,6 +140,5 @@ extern uint64_t memory_map[1048576];
 extern uint64_t mini_ht[32][2];
 extern u_int rounding_modes[4];
 extern u_char restore_candidate[512];
-extern int64_t reg_debug[32];
 
 #endif /* M64P_R4300_ASSEM_ARM64_H */

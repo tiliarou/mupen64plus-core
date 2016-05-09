@@ -271,11 +271,13 @@ static void nullf() {}
 #ifdef NEW_DYNAREC_DEBUG
 #undef USE_MINI_HT
 #define DEBUG_CYCLE_COUNT
-#define DEBUG_BLOCK 0
-//#define DEBUG_INSTRUCTION
+//#define DEBUG_BLOCK
+//#define DEBUG_PC
 static FILE * pDebugFile=NULL;
 static FILE * pDisasmFile=NULL;
-static int debug_block[]={DEBUG_BLOCK};
+#ifdef DEBUG_BLOCK
+static int debug_block[]={0xa400000};
+#endif
 static int rdram_checksum(void)
 {
   int i;
@@ -358,11 +360,9 @@ static void print_pc(int vaddr)
 
   fprintf(pDebugFile, "PC:%.8x\n",vaddr);
 
-#ifdef DEBUG_INSTRUCTION
-  int i;
+  /*int i;
   for(i=0;i<32;i++)
-    fprintf(pDebugFile, "r%d:%.8x%.8x\n",i,((int *)(reg_debug+i))[1],((int *)(reg_debug+i))[0]);
-#endif
+    fprintf(pDebugFile, "r%d:%.8x%.8x\n",i,((int *)(reg+i))[1],((int *)(reg+i))[0]);*/
 }
 #endif
 
@@ -10754,7 +10754,7 @@ int new_recompile_block(int addr)
     pagespan_ds();
   }
 
-#ifdef NEW_DYNAREC_DEBUG
+#if defined (NEW_DYNAREC_DEBUG) && defined(DEBUG_BLOCK)
   int debug=0;
   int block, inst;
   for(block=0;block<(sizeof(debug_block)>>2);block++) {
@@ -10769,22 +10769,13 @@ int new_recompile_block(int addr)
 
   for(i=0;i<slen;i++)
   {
-#ifdef NEW_DYNAREC_DEBUG
+
+#if defined (NEW_DYNAREC_DEBUG) && defined(DEBUG_BLOCK)
   if(debug) {
-#ifdef DEBUG_INSTRUCTION
-    if(i>0) {
-      int hr;
-      for(hr=0; hr<HOST_REGS; hr++) {
-        int r=regs[i-1].regmap[hr];
-        if(((r&63)>=0)&&((r&63)<32)) {
-          intptr_t addr=((intptr_t)reg_debug)+((r&63)<<3)+((r&64)>>4);
-          emit_writeword(hr,addr);
-        }
-      }
-    }
-#endif
     disassemble_inst(i);
+#ifdef DEBUG_PC
     do_print_pc(start+i*4);
+#endif
   }
 #endif
 

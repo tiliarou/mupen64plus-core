@@ -76,11 +76,10 @@ BSS_SECTION
     GLOBAL_VARIABLE(restore_candidate, 512)
     GLOBAL_VARIABLE(instr_addr, 4)
     GLOBAL_VARIABLE(link_register, 8)
-    GLOBAL_VARIABLE(reg_debug, 256)
     GLOBAL_VARIABLE(memory_map, 8388608)
 
 extra_memory:
-    .space    33554432+256+4+4+4+4+4+4+8+8+8+8+4+2+4+4+4+256+8+8+128+256+256+16+8+8+208+8+512+512+8+8+256+8388608
+    .space    33554432+256+4+4+4+4+4+4+8+8+8+8+4+2+4+4+4+256+8+8+128+256+256+16+8+8+208+8+512+512+8+8+8388608
 
     dynarec_local     = extra_memory      + 33554432
     next_interupt     = dynarec_local     + 256
@@ -113,8 +112,7 @@ extra_memory:
     restore_candidate = mini_ht           + 512
     instr_addr        = restore_candidate + 512
     link_register     = instr_addr        + 8 /* 4 bytes free */
-    reg_debug         = link_register     + 8
-    memory_map        = reg_debug         + 256
+    memory_map        = link_register     + 8
 
 END_SECTION
 
