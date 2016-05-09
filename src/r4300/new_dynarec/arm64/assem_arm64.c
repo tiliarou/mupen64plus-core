@@ -5382,7 +5382,7 @@ static void cop1_assemble(int i,struct regstat *i_regs)
       emit_addimm64(FP,(intptr_t)&rounding_modes-(intptr_t)&dynarec_local,HOST_TEMPREG);
       emit_readword_dualindexedx4(HOST_TEMPREG,temp,temp);
       output_w32(0xd53b4400|HOST_TEMPREG); /*Read FPCR*/
-      emit_andimm(HOST_TEMPREG,~0x600000,HOST_TEMPREG); /*Clear RMode*/
+      emit_andimm(HOST_TEMPREG,~0xc00000,HOST_TEMPREG); /*Clear RMode*/
       emit_or(temp,HOST_TEMPREG,HOST_TEMPREG); /*Set RMode*/
       output_w32(0xd51b4400|HOST_TEMPREG); /*Write FPCR*/
     }

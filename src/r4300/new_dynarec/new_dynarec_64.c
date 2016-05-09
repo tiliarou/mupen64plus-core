@@ -7718,6 +7718,9 @@ static void disassemble_inst(int i)
       case C1LS:
         fprintf(pDisasmFile," %x: %s cpr1[%d],r%d+%x",start+i*4,insn[i],(source[i]>>16)&0x1f,rs1[i],imm[i]);
         break;
+      case FLOAT:
+        fprintf(pDisasmFile," %x: %s f%d,f%d,f%d",start+i*4,insn[i],(source[i]>>6)&0x1f,(source[i]>>11)&0x1f,(source[i]>>16)&0x1f);
+        break;
       default:
         fprintf(pDisasmFile," %x: %s",start+i*4,insn[i]);
     }
