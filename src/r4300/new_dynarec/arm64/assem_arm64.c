@@ -1459,35 +1459,20 @@ static void emit_add(int rs1,int rs2,int rt)
 
 static void emit_adds(int rs1,int rs2,int rt)
 {
-  //TOBEDONE
-  assert(0);
-  /*assert(rs1!=29);
+  assert(rs1!=29);
   assert(rs2!=29);
   assert(rt!=29);
   assem_debug("adds %s,%s,%s",regname[rt],regname[rs1],regname[rs2]);
-  output_w32(0xe0900000|rd_rn_rm(rt,rs1,rs2));*/
+  output_w32(0x2b000000|rs2<<16|rs1<<5|rt);
 }
 
 static void emit_adc(int rs1,int rs2,int rt)
 {
-  //TOBEDONE
-  assert(0);
-  /*assert(rs1!=29);
+  assert(rs1!=29);
   assert(rs2!=29);
   assert(rt!=29);
   assem_debug("adc %s,%s,%s",regname[rt],regname[rs1],regname[rs2]);
-  output_w32(0xe0a00000|rd_rn_rm(rt,rs1,rs2));*/
-}
-
-static void emit_adcs(int rs1,int rs2,int rt)
-{
-  //TOBEDONE
-  assert(0);
-  /*assert(rs1!=29);
-  assert(rs2!=29);
-  assert(rt!=29);
-  assem_debug("adcs %s,%s,%s",regname[rt],regname[rs1],regname[rs2]);
-  output_w32(0xe0b00000|rd_rn_rm(rt,rs1,rs2));*/
+  output_w32(0x1a000000|rs2<<16|rs1<<5|rt);
 }
 
 static void emit_sub(int rs1,int rs2,int rt)
@@ -1501,24 +1486,20 @@ static void emit_sub(int rs1,int rs2,int rt)
 
 static void emit_subs(int rs1,int rs2,int rt)
 {
-  //TOBEDONE
-  assert(0);
-  /*assert(rs1!=29);
+  assert(rs1!=29);
   assert(rs2!=29);
   assert(rt!=29);
   assem_debug("subs %s,%s,%s",regname[rt],regname[rs1],regname[rs2]);
-  output_w32(0xe0500000|rd_rn_rm(rt,rs1,rs2));*/
+  output_w32(0x6b000000|rs2<<16|rs1<<5|rt);
 }
 
 static void emit_sbc(int rs1,int rs2,int rt)
 {
-  //TOBEDONE
-  assert(0);
-  /*assert(rs1!=29);
+  assert(rs1!=29);
   assert(rs2!=29);
   assert(rt!=29);
   assem_debug("sbc %s,%s,%s",regname[rt],regname[rs1],regname[rs2]);
-  output_w32(0xe0c00000|rd_rn_rm(rt,rs1,rs2));*/
+  output_w32(0x5a000000|rs2<<16|rs1<<5|rt);
 }
 
 static void emit_sbcs(int rs1,int rs2,int rt)
@@ -1540,12 +1521,19 @@ static void emit_neg(int rs, int rt)
 
 static void emit_negs(int rs, int rt)
 {
-  //TOBEDONE
-  assert(0);
-  /*assert(rs!=29);
+  assert(rs!=29);
   assert(rt!=29);
-  assem_debug("rsbs %s,%s,#0",regname[rt],regname[rs]);
-  output_w32(0xe2700000|rd_rn_rm(rt,rs,0));*/
+  assem_debug("negs %s,%s",regname[rt],regname[rs]);
+  output_w32(0x6b000000|rs<<16|WZR<<5|rt);
+}
+
+static void emit_rscimm(int rs,int imm,u_int rt)
+{
+  assert(rs!=29);
+  assert(rt!=29);
+  assert(imm==0);
+  assem_debug("ngc %s,%s",regname[rt],regname[rs]);
+  output_w32(0x5a000000|rs<<16|WZR<<5|rt);
 }
 
 static void emit_zeroreg(int rt)
@@ -1840,49 +1828,23 @@ static void emit_addnop(u_int r)
   output_w32(0x11000000|r<<5|r);*/
 }
 
-static void emit_adcimm(u_int rs,int imm,u_int rt)
-{
-  //TOBEDONE
-  assert(0);
-  /*assert(rs!=29);
-  assert(rt!=29);
-  u_int armval, ret;
-  ret = genimm_(imm,&armval);
-  assert(ret);
-  assem_debug("adc %s,%s,#%d",regname[rt],regname[rs],imm);
-  output_w32(0xe2a00000|rd_rn_rm(rt,rs,0)|armval);*/
-}
-
-static void emit_rscimm(int rs,int imm,u_int rt)
-{
-  //TOBEDONE
-  assert(0);
-  /*assert(rs!=29);
-  assert(rt!=29);
-  u_int armval, ret;
-  ret = genimm_(imm,&armval);
-  assert(ret);
-  assem_debug("rsc %s,%s,#%d",regname[rt],regname[rs],imm);
-  output_w32(0xe2e00000|rd_rn_rm(rt,rs,0)|armval);*/
-}
-
 static void emit_addimm64_32(int rsh,int rsl,int imm,int rth,int rtl)
 {
-  //TOBEDONE
-  assert(0);
   assert(rsh!=29);
   assert(rsl!=29);
   assert(rth!=29);
   assert(rtl!=29);
-  // TODO: if(genimm_(imm,&armval)) ...
-  // else
   emit_movimm(imm,HOST_TEMPREG);
   emit_adds(HOST_TEMPREG,rsl,rtl);
-  emit_adcimm(rsh,0,rth);
+  emit_adc(rsh,WZR,rth);
 }
 
 #ifdef INVERTED_CARRY
 static void emit_sbb(int rs1,int rs2)
+{
+  assert(0);
+}
+static void emit_adcimm(u_int rs,int imm,u_int rt)
 {
   assert(0);
 }
