@@ -275,7 +275,7 @@ static void nullf() {}
 static FILE * pDebugFile=NULL;
 static FILE * pDisasmFile=NULL;
 #ifdef DEBUG_BLOCK
-static int debug_block[]={0xa400000};
+static int debug_block[]={0xa4000040};
 #endif
 static int rdram_checksum(void)
 {

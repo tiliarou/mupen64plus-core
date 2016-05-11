@@ -255,6 +255,7 @@ static void load_all_consts(signed char regmap[],int is32,u_int dirty,int i);
 static void add_stub(int type,intptr_t addr,intptr_t retaddr,int a,intptr_t b,intptr_t c,int d,int e);
 static void add_to_linker(intptr_t addr,u_int target,int ext);
 static int verify_dirty(void *addr);
+static int internal_branch(uint64_t i_is32, int addr);
 
 static void nullf() {}
 #if defined( ASSEM_DEBUG )
@@ -276,7 +277,7 @@ static void nullf() {}
 static FILE * pDebugFile=NULL;
 static FILE * pDisasmFile=NULL;
 #ifdef DEBUG_BLOCK
-static int debug_block[]={0xa400000};
+static int debug_block[]={0xa4000040};
 #endif
 static int rdram_checksum(void)
 {
@@ -2098,6 +2099,7 @@ static void add_stub(int type,intptr_t addr,intptr_t retaddr,int a,intptr_t b,in
 }
 
 // Write out a single register
+#ifndef wb_register
 static void wb_register(signed char r,signed char regmap[],uint64_t dirty,uint64_t is32)
 {
   int hr;
@@ -2119,6 +2121,8 @@ static void wb_register(signed char r,signed char regmap[],uint64_t dirty,uint64
     }
   }
 }
+#endif
+
 #if 0
 static int mchecksum(void)
 {
@@ -4385,6 +4389,7 @@ static void load_all_consts(signed char regmap[],int is32,u_int dirty,int i)
 }
 
 // Write out all dirty registers (except cycle count)
+#ifndef wb_dirtys
 static void wb_dirtys(signed char i_regmap[],uint64_t i_is32,uint64_t i_dirty)
 {
   int hr;
@@ -4415,8 +4420,11 @@ static void wb_dirtys(signed char i_regmap[],uint64_t i_is32,uint64_t i_dirty)
     }
   }
 }
+#endif
+
 // Write out dirty registers that we need to reload (pair with load_needed_regs)
 // This writes the registers not written by store_regs_bt
+#ifndef wb_needed_dirtys
 static void wb_needed_dirtys(signed char i_regmap[],uint64_t i_is32,uint64_t i_dirty,int addr)
 {
   int hr;
@@ -4450,6 +4458,7 @@ static void wb_needed_dirtys(signed char i_regmap[],uint64_t i_is32,uint64_t i_d
     }
   }
 }
+#endif
 
 // Load all registers (except cycle count)
 static void load_all_regs(signed char i_regmap[])
@@ -4533,6 +4542,7 @@ static void load_regs_entry(int t)
 }
 
 // Store dirty registers prior to branch
+#ifndef store_regs_bt
 static void store_regs_bt(signed char i_regmap[],uint64_t i_is32,uint64_t i_dirty,int addr)
 {
   if(internal_branch(i_is32,addr))
@@ -4574,6 +4584,7 @@ static void store_regs_bt(signed char i_regmap[],uint64_t i_is32,uint64_t i_dirt
     wb_dirtys(i_regmap,i_is32,i_dirty);
   }
 }
+#endif
 
 // Load all needed registers for branch target
 static void load_regs_bt(signed char i_regmap[],uint64_t i_is32,uint64_t i_dirty,int addr)

@@ -25,8 +25,8 @@
 
 #include "new_dynarec_64.c"
 
-//#define DISASM_BLOCK
-static int disasm_block[]={0xa400000};
+#define DISASM_BLOCK
+static int disasm_block[]={0xa4000040};
 
 typedef struct{
   intptr_t addr;

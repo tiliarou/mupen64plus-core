@@ -1666,10 +1666,24 @@ static void emit_storereg(int r, int hr)
   if(r==CCREG) addr=(intptr_t)&cycle_count;
   if(r==FSREG) addr=(intptr_t)&FCR31;
   u_int offset = addr-(intptr_t)&dynarec_local;
-  assert(offset<4096);
+  assert(offset<16380);
   assert(offset%4 == 0); /* 4 bytes aligned */
   assem_debug("str %s,fp+%d",regname[hr],offset);
   output_w32(0xb9000000|((offset>>2)<<10)|(FP<<5)|hr);
+}
+
+static void emit_storereg64(int r, int hr)
+{
+  assert(hr!=29);
+  assert(r<FSREG);
+  intptr_t addr=(intptr_t)&reg[r];
+  if(r==HIREG) addr=(intptr_t)&hi;
+  if(r==LOREG) addr=(intptr_t)&lo;
+  u_int offset = addr-(intptr_t)&dynarec_local;
+  assert(offset<32760);
+  assert(offset%8 == 0); /* 8 bytes aligned */
+  assem_debug("str %s,fp+%d",regname64[hr],offset);
+  output_w32(0xf9000000|((offset>>3)<<10)|(FP<<5)|hr);
 }
 
 static void emit_test(int rs, int rt)
@@ -3456,6 +3470,14 @@ static void emit_read_ptr(intptr_t addr, int rt)
   }
 }
 
+static void emit_sxtw(int rs,int rt)
+{
+  assert(rs!=29);
+  assert(rt!=29);
+  assem_debug("sxtw %s,%s",regname64[rt],regname[rs]);
+  output_w32(0x93407c00|rs<<5|rt);
+}
+
 // Save registers before function call
 static void save_regs(u_int reglist)
 {
@@ -3523,6 +3545,133 @@ static void restore_regs(u_int reglist)
   }
 }
 
+// Write out a single register
+static void wb_register_arm64(signed char r,signed char regmap[],uint64_t dirty,uint64_t is32)
+{
+  int hr;
+  for(hr=0;hr<HOST_REGS;hr++) {
+    if(hr!=EXCLUDE_REG) {
+      if((regmap[hr]&63)==r) {
+        if((dirty>>hr)&1) {
+          if(regmap[hr]<64) {
+            if((is32>>regmap[hr])&1) {
+              emit_sxtw(hr,hr);
+              emit_storereg64(r,hr);
+            }
+            else
+              emit_storereg(r,hr);
+          }else{
+            emit_storereg(r|64,hr);
+          }
+        }
+      }
+    }
+  }
+}
+#define wb_register wb_register_arm64
+
+// Write out all dirty registers (except cycle count)
+static void wb_dirtys_arm64(signed char i_regmap[],uint64_t i_is32,uint64_t i_dirty)
+{
+  int hr;
+  for(hr=0;hr<HOST_REGS;hr++) {
+    if(hr!=EXCLUDE_REG) {
+      if(i_regmap[hr]>0) {
+        if(i_regmap[hr]!=CCREG) {
+          if((i_dirty>>hr)&1) {
+            if(i_regmap[hr]<64) {
+              if( ((i_is32>>i_regmap[hr])&1) ) {
+                emit_sxtw(hr,HOST_TEMPREG);
+                emit_storereg64(i_regmap[hr],HOST_TEMPREG);
+              }
+              else
+                emit_storereg(i_regmap[hr],hr);
+            }else{
+              if( !((i_is32>>(i_regmap[hr]&63))&1) ) {
+                emit_storereg(i_regmap[hr],hr);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+#define wb_dirtys wb_dirtys_arm64
+
+// Write out dirty registers that we need to reload (pair with load_needed_regs)
+// This writes the registers not written by store_regs_bt
+static void wb_needed_dirtys_arm64(signed char i_regmap[],uint64_t i_is32,uint64_t i_dirty,int addr)
+{
+  int hr;
+  int t=(addr-start)>>2;
+  for(hr=0;hr<HOST_REGS;hr++) {
+    if(hr!=EXCLUDE_REG) {
+      if(i_regmap[hr]>0) {
+        if(i_regmap[hr]!=CCREG) {
+          if(i_regmap[hr]==regs[t].regmap_entry[hr] && ((regs[t].dirty>>hr)&1) && !(((i_is32&~regs[t].was32&~unneeded_reg_upper[t])>>(i_regmap[hr]&63))&1)) {
+            if((i_dirty>>hr)&1) {
+              if(i_regmap[hr]<64) {
+                if( ((i_is32>>i_regmap[hr])&1) ) {
+                  emit_sxtw(hr,HOST_TEMPREG);
+                  emit_storereg64(i_regmap[hr],HOST_TEMPREG);
+                }
+                else
+                  emit_storereg(i_regmap[hr],hr);
+              }else{
+                if( !((i_is32>>(i_regmap[hr]&63))&1) ) {
+                  emit_storereg(i_regmap[hr],hr);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+#define wb_needed_dirtys wb_needed_dirtys_arm64
+
+// Store dirty registers prior to branch
+static void store_regs_bt_arm64(signed char i_regmap[],uint64_t i_is32,uint64_t i_dirty,int addr)
+{
+  if(internal_branch(i_is32,addr))
+  {
+    int t=(addr-start)>>2;
+    int hr;
+    for(hr=0;hr<HOST_REGS;hr++) {
+      if(hr!=EXCLUDE_REG) {
+        if(i_regmap[hr]>0 && i_regmap[hr]!=CCREG) {
+          if(i_regmap[hr]!=regs[t].regmap_entry[hr] || !((regs[t].dirty>>hr)&1) || (((i_is32&~regs[t].was32&~unneeded_reg_upper[t])>>(i_regmap[hr]&63))&1)) {
+            if((i_dirty>>hr)&1) {
+              if(i_regmap[hr]<64) {
+                if(!((unneeded_reg[t]>>i_regmap[hr])&1)) {
+                  if( ((i_is32>>i_regmap[hr])&1) && !((unneeded_reg_upper[t]>>i_regmap[hr])&1) ) {
+                    emit_sxtw(hr,HOST_TEMPREG);
+                    emit_storereg64(i_regmap[hr],HOST_TEMPREG);
+                  }
+                  else
+                    emit_storereg(i_regmap[hr],hr);
+                }
+              }else{
+                if( !((i_is32>>(i_regmap[hr]&63))&1) && !((unneeded_reg_upper[t]>>(i_regmap[hr]&63))&1) ) {
+                  emit_storereg(i_regmap[hr],hr);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  else
+  {
+    // Branch out of this block, write out all dirty regs
+    wb_dirtys(i_regmap,i_is32,i_dirty);
+  }
+}
+#define store_regs_bt store_regs_bt_arm64
+
 // Sign-extend to 64 bits and write out upper half of a register
 // This is useful where we have a 32-bit value in a register, and want to
 // keep it in a 32-bit register, but can't guarantee that it won't be read
@@ -3558,11 +3707,12 @@ static void wb_valid(signed char pre[],signed char entry[],u_int dirty_pre,u_int
         if(tr>0) {
           if(((dirty_pre&~dirty)>>hr)&1) {
             if(tr>0&&tr<36) {
-              emit_storereg(tr,hr);
-              if( ((is32_pre&~uu)>>tr)&1 ) {
-                emit_sarimm(hr,31,HOST_TEMPREG);
-                emit_storereg(tr|64,HOST_TEMPREG);
+              if(((is32_pre&~uu)>>tr)&1) {
+                emit_sxtw(hr,HOST_TEMPREG);
+                emit_storereg64(tr,HOST_TEMPREG);
               }
+              else
+                emit_storereg(tr,hr);
             }
             else if(tr>=64) {
               emit_storereg(tr,hr);
@@ -3589,11 +3739,12 @@ static void wb_consts(signed char i_regmap[],uint64_t i_is32,u_int i_dirty,int i
           else {
             emit_movimm(value,HOST_TEMPREG);
           }
-          emit_storereg(i_regmap[hr],HOST_TEMPREG);
           if((i_is32>>i_regmap[hr])&1) {
-            if(value!=-1&&value!=0) emit_sarimm(HOST_TEMPREG,31,HOST_TEMPREG);
-            emit_storereg(i_regmap[hr]|64,HOST_TEMPREG);
+            if(value!=-1&&value!=0) emit_sxtw(HOST_TEMPREG,HOST_TEMPREG);
+            emit_storereg64(i_regmap[hr],HOST_TEMPREG);
           }
+          else
+            emit_storereg(i_regmap[hr],HOST_TEMPREG);
         }
       }
     }
@@ -3612,11 +3763,12 @@ static void wb_invalidate_arm64(signed char pre[],signed char entry[],uint64_t d
             if(get_reg(entry,pre[hr])<0) {
               if(pre[hr]<64) {
                 if(!((u>>pre[hr])&1)) {
-                  emit_storereg(pre[hr],hr);
                   if( ((is32>>pre[hr])&1) && !((uu>>pre[hr])&1) ) {
-                    emit_sarimm(hr,31,hr);
-                    emit_storereg(pre[hr]|64,hr);
+                    emit_sxtw(hr,hr);
+                    emit_storereg64(pre[hr],hr);
                   }
+                  else
+                    emit_storereg(pre[hr],hr);
                 }
               }else{
                 if(!((uu>>(pre[hr]&63))&1) && !((is32>>(pre[hr]&63))&1)) {
