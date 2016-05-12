@@ -681,15 +681,16 @@ static void get_bounds(intptr_t addr,uintptr_t *start,uintptr_t *end)
 static void alloc_reg(struct regstat *cur,int i,signed char tr)
 {
   int r,hr;
-  int preferred_reg = (tr&7);
+  int preferred_reg=19+(tr%10); // Try to allocate callee-save register first
   if(tr==CCREG) preferred_reg=HOST_CCREG;
-  if(tr==PTEMP||tr==FTEMP) preferred_reg=12;
+  if(tr==BTREG) preferred_reg=HOST_BTREG;
+  if(tr==PTEMP||tr==FTEMP) preferred_reg=18;
   
   // Don't allocate unused registers
   if((cur->u>>tr)&1) return;
   
   // see if it's already allocated
-  for(hr=0;hr<HOST_REGS;hr++)
+  for(hr=HOST_REGS-1;hr>=0;hr--)
   {
     if(cur->regmap[hr]==tr) return;
   }
@@ -724,7 +725,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char tr)
   // first (see above) before removing old mappings.  If this is not
   // possible then go ahead and clear out the registers that are no
   // longer needed.
-  for(hr=0;hr<HOST_REGS;hr++)
+  for(hr=HOST_REGS-1;hr>=0;hr--)
   {
     r=cur->regmap[hr];
     if(r>=0) {
@@ -740,7 +741,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char tr)
   // Try to allocate any available register, but prefer
   // registers that have not been used recently.
   if(i>0) {
-    for(hr=0;hr<HOST_REGS;hr++) {
+    for(hr=HOST_REGS-1;hr>=0;hr--) {
       if(hr!=EXCLUDE_REG&&cur->regmap[hr]==-1) {
         if(regs[i-1].regmap[hr]!=rs1[i-1]&&regs[i-1].regmap[hr]!=rs2[i-1]&&regs[i-1].regmap[hr]!=rt1[i-1]&&regs[i-1].regmap[hr]!=rt2[i-1]) {
           cur->regmap[hr]=tr;
@@ -752,7 +753,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char tr)
     }
   }
   // Try to allocate any available register
-  for(hr=0;hr<HOST_REGS;hr++) {
+  for(hr=HOST_REGS-1;hr>=0;hr--) {
     if(hr!=EXCLUDE_REG&&cur->regmap[hr]==-1) {
       cur->regmap[hr]=tr;
       cur->dirty&=~(1<<hr);
@@ -792,7 +793,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char tr)
       for(r=1;r<=MAXREG;r++)
       {
         if(hsn[r]==j&&r!=rs1[i-1]&&r!=rs2[i-1]&&r!=rt1[i-1]&&r!=rt2[i-1]) {
-          for(hr=0;hr<HOST_REGS;hr++) {
+          for(hr=HOST_REGS-1;hr>=0;hr--) {
             if(hr!=HOST_CCREG||j<hsn[CCREG]) {
               if(cur->regmap[hr]==r+64) {
                 cur->regmap[hr]=tr;
@@ -802,7 +803,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char tr)
               }
             }
           }
-          for(hr=0;hr<HOST_REGS;hr++) {
+          for(hr=HOST_REGS-1;hr>=0;hr--) {
             if(hr!=HOST_CCREG||j<hsn[CCREG]) {
               if(cur->regmap[hr]==r) {
                 cur->regmap[hr]=tr;
@@ -821,7 +822,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char tr)
     for(r=1;r<=MAXREG;r++)
     {
       if(hsn[r]==j) {
-        for(hr=0;hr<HOST_REGS;hr++) {
+        for(hr=HOST_REGS-1;hr>=0;hr--) {
           if(cur->regmap[hr]==r+64) {
             cur->regmap[hr]=tr;
             cur->dirty&=~(1<<hr);
@@ -829,7 +830,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char tr)
             return;
           }
         }
-        for(hr=0;hr<HOST_REGS;hr++) {
+        for(hr=HOST_REGS-1;hr>=0;hr--) {
           if(cur->regmap[hr]==r) {
             cur->regmap[hr]=tr;
             cur->dirty&=~(1<<hr);
@@ -845,7 +846,7 @@ static void alloc_reg(struct regstat *cur,int i,signed char tr)
 
 static void alloc_reg64(struct regstat *cur,int i,signed char tr)
 {
-  int preferred_reg = 8+(tr&1);
+  int preferred_reg=19+(tr%10); // Try to allocate callee-save register first
   int r,hr;
   
   // allocate the lower 32 bits
@@ -855,7 +856,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char tr)
   if((cur->uu>>tr)&1) return;
   
   // see if the upper half is already allocated
-  for(hr=0;hr<HOST_REGS;hr++)
+  for(hr=HOST_REGS-1;hr>=0;hr--)
   {
     if(cur->regmap[hr]==tr+64) return;
   }
@@ -906,7 +907,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char tr)
   // Try to allocate any available register, but prefer
   // registers that have not been used recently.
   if(i>0) {
-    for(hr=0;hr<HOST_REGS;hr++) {
+    for(hr=HOST_REGS-1;hr>=0;hr--) {
       if(hr!=EXCLUDE_REG&&cur->regmap[hr]==-1) {
         if(regs[i-1].regmap[hr]!=rs1[i-1]&&regs[i-1].regmap[hr]!=rs2[i-1]&&regs[i-1].regmap[hr]!=rt1[i-1]&&regs[i-1].regmap[hr]!=rt2[i-1]) {
           cur->regmap[hr]=tr|64;
@@ -918,7 +919,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char tr)
     }
   }
   // Try to allocate any available register
-  for(hr=0;hr<HOST_REGS;hr++) {
+  for(hr=HOST_REGS-1;hr>=0;hr--) {
     if(hr!=EXCLUDE_REG&&cur->regmap[hr]==-1) {
       cur->regmap[hr]=tr|64;
       cur->dirty&=~(1<<hr);
@@ -958,7 +959,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char tr)
       for(r=1;r<=MAXREG;r++)
       {
         if(hsn[r]==j&&r!=rs1[i-1]&&r!=rs2[i-1]&&r!=rt1[i-1]&&r!=rt2[i-1]) {
-          for(hr=0;hr<HOST_REGS;hr++) {
+          for(hr=HOST_REGS-1;hr>=0;hr--) {
             if(hr!=HOST_CCREG||j<hsn[CCREG]) {
               if(cur->regmap[hr]==r+64) {
                 cur->regmap[hr]=tr|64;
@@ -968,7 +969,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char tr)
               }
             }
           }
-          for(hr=0;hr<HOST_REGS;hr++) {
+          for(hr=HOST_REGS-1;hr>=0;hr--) {
             if(hr!=HOST_CCREG||j<hsn[CCREG]) {
               if(cur->regmap[hr]==r) {
                 cur->regmap[hr]=tr|64;
@@ -987,7 +988,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char tr)
     for(r=1;r<=MAXREG;r++)
     {
       if(hsn[r]==j) {
-        for(hr=0;hr<HOST_REGS;hr++) {
+        for(hr=HOST_REGS-1;hr>=0;hr--) {
           if(cur->regmap[hr]==r+64) {
             cur->regmap[hr]=tr|64;
             cur->dirty&=~(1<<hr);
@@ -995,7 +996,7 @@ static void alloc_reg64(struct regstat *cur,int i,signed char tr)
             return;
           }
         }
-        for(hr=0;hr<HOST_REGS;hr++) {
+        for(hr=HOST_REGS-1;hr>=0;hr--) {
           if(cur->regmap[hr]==r) {
             cur->regmap[hr]=tr|64;
             cur->dirty&=~(1<<hr);
@@ -1024,7 +1025,7 @@ static void alloc_reg_temp(struct regstat *cur,int i,signed char tr)
   }
   
   // Try to allocate any available register
-  for(hr=HOST_REGS-1;hr>=0;hr--) {
+  for(hr=0;hr<HOST_REGS;hr++) {
     if(hr!=EXCLUDE_REG&&cur->regmap[hr]==-1) {
       cur->regmap[hr]=tr;
       cur->dirty&=~(1<<hr);
@@ -1034,7 +1035,7 @@ static void alloc_reg_temp(struct regstat *cur,int i,signed char tr)
   }
   
   // Find an unneeded register
-  for(hr=HOST_REGS-1;hr>=0;hr--)
+  for(hr=0;hr<HOST_REGS;hr++)
   {
     r=cur->regmap[hr];
     if(r>=0) {
