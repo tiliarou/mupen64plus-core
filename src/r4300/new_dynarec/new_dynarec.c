@@ -274,8 +274,9 @@ static void nullf() {}
 //#define DEBUG_PC
 static FILE * pDebugFile=NULL;
 static FILE * pDisasmFile=NULL;
+static int do_print_debug = 0;
 #ifdef DEBUG_BLOCK
-static int debug_block[]={0xa400000};
+static int debug_block[]={0xa4000040};
 #endif
 static int rdram_checksum(void)
 {
@@ -322,7 +323,7 @@ static int cop0_checksum(void)
 
 static void print_debug_info(u_int vaddr)
 {
-  if(pDebugFile == NULL)
+  if((pDebugFile == NULL)||(do_print_debug == 0))
     return;
 
   int gpr_sum = gpr_checksum();
@@ -1329,6 +1330,7 @@ static void invalidate_addr(u_int addr)
 void invalidate_all_pages(void)
 {
   u_int page;
+  do_print_debug = 1;
   for(page=0;page<4096;page++)
     invalidate_page(page);
   for(page=0;page<1048576;page++)

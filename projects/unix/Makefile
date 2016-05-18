@@ -93,8 +93,6 @@ ifneq ("$(filter aarch64,$(HOST_CPU))","")
   ARCH_DETECTED := 64BITS
   PIC ?= 1
   NEW_DYNAREC := 1
-  CFLAGS += -DNEW_DYNAREC_DEBUG
-  LDFLAGS += -Wl,-Map,core.map
   $(warning Architecture "$(HOST_CPU)" not officially supported.')
 endif
 ifneq ("$(filter arm%,$(HOST_CPU))","")
@@ -281,7 +279,7 @@ endif
 
 ifeq ($(USE_GLES), 1)
   CFLAGS += -DUSE_GLES
-  LDLIBS += -lGLESv2
+  # LDLIBS += -lGLESv2
   # OSD uses non-ES code and breaks attribs of video plugins
   OSD=0
 endif

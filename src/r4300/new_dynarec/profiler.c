@@ -25,8 +25,8 @@
 
 #include "new_dynarec_64.c"
 
-//#define DISASM_BLOCK
-static int disasm_block[]={0xa400000};
+#define DISASM_BLOCK
+static int disasm_block[]={0xa4000040};
 
 typedef struct{
   intptr_t addr;
@@ -407,7 +407,7 @@ void profiler_block(int addr)
 
     if(insn[i].id == CALL_INST) {
       uint32_t j = 0;
-      intptr_t addr = INSTRUCTION.operands[0].imm;
+      intptr_t addr = (intptr_t)INSTRUCTION.operands[0].imm;
 
       while(func[j].addr != -1) {
         if(addr == func[j].addr)

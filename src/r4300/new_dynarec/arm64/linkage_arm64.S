@@ -79,7 +79,7 @@ BSS_SECTION
     GLOBAL_VARIABLE(memory_map, 8388608)
 
 extra_memory:
-    .space    33554432+256+4+4+4+4+4+4+8+8+8+8+4+2+4+4+4+256+8+8+128+256+256+16+8+8+208+8+512+512+8+8+8388608
+    .space    33554432+256+4+4+4+4+4+4+8+8+8+8+4+2+2+4+4+256+8+8+128+256+256+16+8+8+208+8+512+512+8+8+8388608
 
     dynarec_local     = extra_memory      + 33554432
     next_interupt     = dynarec_local     + 256
@@ -94,8 +94,8 @@ extra_memory:
     cpu_dword         = readmem_dword     + 8
     cpu_word          = cpu_dword         + 8
     cpu_hword         = cpu_word          + 4
-    cpu_byte          = cpu_hword         + 2 /* 1 byte free */
-    FCR0              = cpu_hword         + 4
+    cpu_byte          = cpu_hword         + 2
+    FCR0              = cpu_byte          + 2 /* 1 byte free */
     FCR31             = FCR0              + 4
     reg               = FCR31             + 4
     hi                = reg               + 256
