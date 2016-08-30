@@ -1547,6 +1547,26 @@ static void alu_alloc(struct regstat *current,int i)
       {
         if(!((current->uu>>rt1[i])&1)) {
           alloc_reg64(current,i,rt1[i]);
+        } else {
+          /*FIXME: This is a hack in order to fix https://github.com/mupen64plus/mupen64plus-core/issues/171
+          If the upper part of rt1 is unneeded it should not be allocated.
+          
+          This is happening when recompiling the branch delay slot at 0x80182c10.
+          
+            0x80182a80: LW r2,r29+20
+          ...
+          * 0x80182c00: LW r3,r29+40
+            0x80182c04: LW r4,r3+14
+            0x80182c08: AND r2,r4,r5
+            0x80182c0c: BNE r2,r0,80182c74
+            0x80182c10: AND r2,r4,r6
+          * 0x80182c14: LW r2,r3+38
+          ...
+          * 0x80182c74: SW r2,r3+14
+          */
+          
+          if((get_reg(current->regmap,rt1[i]|64)>=0)) 
+            current->regmap[get_reg(current->regmap,rt1[i]|64)]=-1;
         }
         if(get_reg(current->regmap,rt1[i]|64)>=0) {
           if(rs1[i]&&rs2[i]) {
