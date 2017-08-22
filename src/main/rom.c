@@ -51,8 +51,6 @@ enum { DEFAULT_COUNT_PER_SCANLINE = 1500 };
 enum { DEFAULT_COUNT_PER_OP = 2 };
 /* by default, extra mem is enabled */
 enum { DEFAULT_DISABLE_EXTRA_MEM = 0 };
-/* by default, Audio Signal is disabled */
-enum { DEFAULT_AUDIO_SIGNAL = 0 };
 /* by default, Delay SI is enabled */
 enum { DEFAULT_DELAY_SI = 1 };
 
@@ -179,7 +177,6 @@ m64p_error open_rom(const unsigned char* romimage, unsigned int size)
     /* add some useful properties to ROM_PARAMS */
     ROM_PARAMS.systemtype = rom_country_code_to_system_type(ROM_HEADER.Country_code);
     ROM_PARAMS.countperop = DEFAULT_COUNT_PER_OP;
-    ROM_PARAMS.audiosignal = DEFAULT_AUDIO_SIGNAL;
     ROM_PARAMS.countperscanline = DEFAULT_COUNT_PER_SCANLINE;
     ROM_PARAMS.disableextramem = DEFAULT_DISABLE_EXTRA_MEM;
     ROM_PARAMS.delaysi = DEFAULT_DELAY_SI;
@@ -200,7 +197,6 @@ m64p_error open_rom(const unsigned char* romimage, unsigned int size)
         ROM_SETTINGS.players = entry->players;
         ROM_SETTINGS.rumble = entry->rumble;
         ROM_PARAMS.countperop = entry->countperop;
-        ROM_PARAMS.audiosignal = entry->audio_signal;
         ROM_PARAMS.countperscanline = entry->count_per_scanline;
         ROM_PARAMS.disableextramem = entry->disableextramem;
         ROM_PARAMS.delaysi = entry->delaysi;
@@ -215,7 +211,6 @@ m64p_error open_rom(const unsigned char* romimage, unsigned int size)
         ROM_SETTINGS.players = 0;
         ROM_SETTINGS.rumble = 0;
         ROM_PARAMS.countperop = DEFAULT_COUNT_PER_OP;
-        ROM_PARAMS.audiosignal = DEFAULT_AUDIO_SIGNAL;
         ROM_PARAMS.countperscanline = DEFAULT_COUNT_PER_SCANLINE;
         ROM_PARAMS.disableextramem = DEFAULT_DISABLE_EXTRA_MEM;
         ROM_PARAMS.delaysi = DEFAULT_DELAY_SI;
@@ -460,7 +455,6 @@ void romdatabase_open(void)
             search->entry.players = 0;
             search->entry.rumble = 0;
             search->entry.countperop = DEFAULT_COUNT_PER_OP;
-            search->entry.audio_signal = DEFAULT_AUDIO_SIGNAL;
             search->entry.count_per_scanline = DEFAULT_COUNT_PER_SCANLINE;
             search->entry.disableextramem = DEFAULT_DISABLE_EXTRA_MEM;
             search->entry.delaysi = DEFAULT_DELAY_SI;
@@ -506,10 +500,6 @@ void romdatabase_open(void)
                     search->entry.crc1 = search->entry.crc2 = 0;
                     DebugMessage(M64MSG_WARNING, "ROM Database: Invalid CRC on line %i", lineno);
                 }
-            }
-            else if (!strcmp(l.name, "AudioSignal"))
-            {
-                search->entry.audio_signal = atoi(l.value);
             }
             else if(!strcmp(l.name, "CountPerScanline"))
             {
