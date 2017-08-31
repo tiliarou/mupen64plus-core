@@ -41,18 +41,7 @@ struct r4300_core;
 
 struct new_dynarec_hot_state
 {
-#if NEW_DYNAREC == NEW_DYNAREC_X86
-    int cycle_count;
-    int last_count;
-    int pending_exception;
-    int pcaddr;
-    uint64_t rdword;
-    int branch_target;
-    struct precomp_instr fake_pc;
-    unsigned int mini_ht[32][2];
-    unsigned char restore_candidate[512];
-    unsigned int memory_map[1048576];
-#elif NEW_DYNAREC == NEW_DYNAREC_ARM
+#ifdef NEW_DYNAREC
     /* 0-6:   used by dynarec to push/pop caller-saved register (r0-r3, r12) and possibly lr (see invalidate_addr)
        7-15:  saved_context,
        16-23: stack_level_1

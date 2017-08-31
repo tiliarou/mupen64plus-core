@@ -363,6 +363,9 @@
     <ClCompile Include="..\..\src\device\r4300\x86_64\dynarec.c">
       <Filter>device\r4300\x86_64</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\device\r4300\new_dynarec\recomp_dbg.c">
+      <Filter>device\r4300\new_dynarec</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\device\ai\ai_controller.h">
@@ -697,6 +700,12 @@
     </ClInclude>
     <ClInclude Include="..\..\src\device\si\transferpak.h">
       <Filter>device\si</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\device\r4300\new_dynarec\x86\recomp_dbg_x86.h">
+      <Filter>device\r4300\new_dynarec\x86</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\device\r4300\new_dynarec\arm\recomp_dbg_arm.h">
+      <Filter>device\r4300\new_dynarec\arm</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -82,8 +82,8 @@
 /* Structure members definitions */
 DEFINE(device, r4300);
 
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
 DEFINE(r4300_core, regs);
 DEFINE(r4300_core, hi);
 DEFINE(r4300_core, lo);
@@ -104,8 +104,8 @@ DEFINE(r4300_core, save_eip);
 #endif
 DEFINE(r4300_core, return_address);
 
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
 DEFINE(r4300_core, wword);
 DEFINE(r4300_core, wdword);
 DEFINE(r4300_core, wmask);
@@ -113,8 +113,8 @@ DEFINE(r4300_core, address);
 #endif
 
 DEFINE(r4300_core, cp0);
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
 DEFINE(cp0, regs);
 DEFINE(cp0, next_interrupt);
 #endif
@@ -137,19 +137,6 @@ DEFINE(memory, writememd);
 
 #ifdef NEW_DYNAREC
 DEFINE(r4300_core, new_dynarec_hot_state);
-#if NEW_DYNAREC == NEW_DYNAREC_X86
-DEFINE(new_dynarec_hot_state, cycle_count);
-DEFINE(new_dynarec_hot_state, last_count);
-DEFINE(new_dynarec_hot_state, pending_exception);
-DEFINE(new_dynarec_hot_state, pcaddr);
-DEFINE(new_dynarec_hot_state, rdword);
-DEFINE(new_dynarec_hot_state, branch_target);
-DEFINE(new_dynarec_hot_state, fake_pc);
-DEFINE(new_dynarec_hot_state, mini_ht);
-DEFINE(new_dynarec_hot_state, restore_candidate);
-DEFINE(new_dynarec_hot_state, memory_map);
-#elif NEW_DYNAREC == NEW_DYNAREC_ARM
-DEFINE(r4300_core, extra_memory);
 DEFINE(new_dynarec_hot_state, dynarec_local);
 DEFINE(new_dynarec_hot_state, next_interrupt);
 DEFINE(new_dynarec_hot_state, cycle_count);
@@ -179,7 +166,6 @@ DEFINE(new_dynarec_hot_state, ram_offset);
 DEFINE(new_dynarec_hot_state, mini_ht);
 DEFINE(new_dynarec_hot_state, restore_candidate);
 DEFINE(new_dynarec_hot_state, memory_map);
-#endif
 #endif
 
 DEFINE(device, ri);

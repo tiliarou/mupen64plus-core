@@ -44,7 +44,7 @@
 void init_r4300(struct r4300_core* r4300, struct memory* mem, struct ri_controller* ri, const struct interrupt_handler* interrupt_handlers, unsigned int emumode, unsigned int count_per_op, int no_compiled_jump, int special_rom)
 {
     struct new_dynarec_hot_state* new_dynarec_hot_state =
-#if NEW_DYNAREC == NEW_DYNAREC_ARM
+#ifdef NEW_DYNAREC
         &r4300->new_dynarec_hot_state;
 #else
         NULL;
@@ -203,8 +203,8 @@ void run_r4300(struct r4300_core* r4300)
 
 int64_t* r4300_regs(struct r4300_core* r4300)
 {
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     return r4300->regs;
 #else
     return r4300->new_dynarec_hot_state.regs;
@@ -213,8 +213,8 @@ int64_t* r4300_regs(struct r4300_core* r4300)
 
 int64_t* r4300_mult_hi(struct r4300_core* r4300)
 {
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     return &r4300->hi;
 #else
     return &r4300->new_dynarec_hot_state.hi;
@@ -223,8 +223,8 @@ int64_t* r4300_mult_hi(struct r4300_core* r4300)
 
 int64_t* r4300_mult_lo(struct r4300_core* r4300)
 {
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     return &r4300->lo;
 #else
     return &r4300->new_dynarec_hot_state.lo;
@@ -249,8 +249,8 @@ uint32_t* r4300_pc(struct r4300_core* r4300)
 
 struct precomp_instr** r4300_pc_struct(struct r4300_core* r4300)
 {
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     return &r4300->pc;
 #else
     return &r4300->new_dynarec_hot_state.pc;
@@ -259,8 +259,8 @@ struct precomp_instr** r4300_pc_struct(struct r4300_core* r4300)
 
 int* r4300_stop(struct r4300_core* r4300)
 {
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     return &r4300->stop;
 #else
     return &r4300->new_dynarec_hot_state.stop;
@@ -274,8 +274,8 @@ unsigned int get_r4300_emumode(struct r4300_core* r4300)
 
 uint32_t* r4300_address(struct r4300_core* r4300)
 {
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     return &r4300->address;
 #else
     return &r4300->new_dynarec_hot_state.address;
@@ -284,8 +284,8 @@ uint32_t* r4300_address(struct r4300_core* r4300)
 
 uint32_t* r4300_wmask(struct r4300_core* r4300)
 {
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     return &r4300->wmask;
 #else
     return &r4300->new_dynarec_hot_state.wmask;
@@ -294,8 +294,8 @@ uint32_t* r4300_wmask(struct r4300_core* r4300)
 
 uint32_t* r4300_wword(struct r4300_core* r4300)
 {
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     return &r4300->wword;
 #else
     return &r4300->new_dynarec_hot_state.wword;
@@ -304,8 +304,8 @@ uint32_t* r4300_wword(struct r4300_core* r4300)
 
 uint64_t* r4300_wdword(struct r4300_core* r4300)
 {
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     return &r4300->wdword;
 #else
     return &r4300->new_dynarec_hot_state.wdword;

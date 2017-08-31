@@ -46,11 +46,36 @@
 #include <sys/mman.h>
 #endif
 
+#ifdef RECOMPILER_DEBUG
+#ifdef RECOMP_DBG
+#undef NEW_DYNAREC
+#define NEW_DYNAREC RECOMPILER_DEBUG
+#else
+void recomp_dbg_init(void);
+void recomp_dbg_cleanup(void);
+void recomp_dbg_block(int addr);
+#endif
+#endif
+
+#undef assert
+#define assert(A)																							                                  \
+	do{ 																									                                        \
+		if((A)==0) { 																						                                    \
+			/*DebugMessage(M64MSG_INFO,"Assertion failure at line %d, in file %s",__LINE__,__FILE__);*/ 	\
+      __debugbreak();                                                                           \
+			/*exit(1);*/																						                                  \
+		} 																									                                        \
+	}																										                                          \
+	while(0)
+
+
 #if NEW_DYNAREC == NEW_DYNAREC_X86
 #include "x86/assem_x86.h"
+#include "x86/recomp_dbg_x86.h"
 #elif NEW_DYNAREC == NEW_DYNAREC_ARM
 #include "arm/arm_cpu_features.h"
 #include "arm/assem_arm.h"
+#include "arm/recomp_dbg_arm.h"
 #else
 #error Unsupported dynarec architecture
 #endif
@@ -210,6 +235,7 @@ static void load_all_consts(signed char regmap[],int is32,u_int dirty,int i);
 
 void *base_addr;
 u_char *out;
+unsigned int using_tlb;
 unsigned int stop_after_jal;
 
 static u_int start;
@@ -261,8 +287,6 @@ static int is_delayslot;
 static int cop1_usable;
 static char *copy;
 static int expirep;
-unsigned int using_tlb;
-unsigned int stop_after_jal;
 static u_int dirty_entry_count;
 static u_int copy_size;
 static u_int hash_table[65536][4];
@@ -2303,7 +2327,7 @@ void invalidate_all_pages(void)
     }
   }
   #if NEW_DYNAREC == NEW_DYNAREC_ARM
-  __clear_cache((void *)base_addr,(void *)base_addr+(1<<TARGET_SIZE_2));
+  __clear_cache((char *)base_addr,(char *)base_addr+(1<<TARGET_SIZE_2));
   //cacheflush((void *)base_addr,(void *)base_addr+(1<<TARGET_SIZE_2),0);
   #endif
   #ifdef USE_MINI_HT
@@ -4078,7 +4102,7 @@ static void store_assemble(int i,struct regstat *i_regs)
   int s,th,tl,map=-1,cache=-1;
   int addr,temp;
   int offset;
-  int jaddr=0,jaddr2,type;
+  int jaddr=0,type;
   int memtarget,c=0;
   int agr=AGEN1+(i&1);
   u_int hr,reglist=0;
@@ -4208,7 +4232,7 @@ static void store_assemble(int i,struct regstat *i_regs)
       #if defined(HAVE_CONDITIONAL_CALL) && !defined(DESTRUCTIVE_SHIFT)
       emit_callne(invalidate_addr_reg[addr]);
       #else
-      jaddr2=(int)out;
+      int jaddr2=(int)out;
       emit_jne(0);
       add_stub(INVCODE_STUB,jaddr2,(int)out,reglist|(1<<HOST_CCREG),addr,0,0,0);
       #endif
@@ -4268,7 +4292,7 @@ static void storelr_assemble(int i,struct regstat *i_regs)
   int temp;
   int temp2;
   int offset;
-  int jaddr=0,jaddr2;
+  int jaddr=0;
   int case1,case2,case3;
   int done0,done1,done2;
   int memtarget,c=0;
@@ -4483,7 +4507,7 @@ static void storelr_assemble(int i,struct regstat *i_regs)
     #if defined(HAVE_CONDITIONAL_CALL) && !defined(DESTRUCTIVE_SHIFT)
     emit_callne(invalidate_addr_reg[temp]);
     #else
-    jaddr2=(int)out;
+    int jaddr2=(int)out;
     emit_jne(0);
     add_stub(INVCODE_STUB,jaddr2,(int)out,reglist|(1<<HOST_CCREG),temp,0,0,0);
     #endif
@@ -4510,7 +4534,7 @@ static void c1ls_assemble(int i,struct regstat *i_regs)
   int map=-1;
   int offset;
   int c=0;
-  int jaddr,jaddr2=0,jaddr3,type;
+  int jaddr,jaddr2=0,type;
   int agr=AGEN1+(i&1);
   u_int hr,reglist=0;
   th=get_reg(i_regs->regmap,FTEMP|64);
@@ -4665,7 +4689,7 @@ static void c1ls_assemble(int i,struct regstat *i_regs)
       #if defined(HAVE_CONDITIONAL_CALL) && !defined(DESTRUCTIVE_SHIFT)
       emit_callne(invalidate_addr_reg[temp]);
       #else
-      jaddr3=(int)out;
+      int jaddr3=(int)out;
       emit_jne(0);
       add_stub(INVCODE_STUB,jaddr3,(int)out,reglist|(1<<HOST_CCREG),temp,0,0,0);
       #endif
@@ -7585,11 +7609,17 @@ void new_dynarec_init(void)
 {
   DebugMessage(M64MSG_INFO, "Init new dynarec");
 
+#if defined(RECOMPILER_DEBUG) && !defined(RECOMP_DBG)
+  recomp_dbg_init();
+#endif
+
 #if NEW_DYNAREC == NEW_DYNAREC_ARM
+#if !defined(WIN32)
   if ((base_addr = mmap ((u_char *)BASE_ADDR, 1<<TARGET_SIZE_2,
             PROT_READ | PROT_WRITE | PROT_EXEC,
             MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS,
             -1, 0)) <= 0) {DebugMessage(M64MSG_ERROR, "mmap() failed");}
+#endif
 #else
 #if defined(WIN32)
   base_addr = VirtualAlloc(NULL, 1<<TARGET_SIZE_2, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
@@ -7658,6 +7688,10 @@ void new_dynarec_init(void)
 
 void new_dynarec_cleanup(void)
 {
+#if defined(RECOMPILER_DEBUG) && !defined(RECOMP_DBG)
+  recomp_dbg_cleanup();
+#endif
+
   int n;
   for(n=0;n<4096;n++) ll_clear(jump_in+n);
   for(n=0;n<4096;n++) ll_clear(jump_out+n);
@@ -7675,6 +7709,11 @@ void new_dynarec_cleanup(void)
 
 int new_recompile_block(int addr)
 {
+#if defined(RECOMPILER_DEBUG) && !defined(RECOMP_DBG)
+  recomp_dbg_block(addr);
+#endif
+
+
   assem_debug("NOTCOMPILED: addr = %x -> %x", (int)addr, (int)out);
 #if COUNT_NOTCOMPILEDS
   notcompiledCount++;
@@ -10885,6 +10924,7 @@ int new_recompile_block(int addr)
   if(out > (u_char *)((u_char *)base_addr+(1<<TARGET_SIZE_2)-MAX_OUTPUT_BLOCK_SIZE-JUMP_TABLE_SIZE))
     out=(u_char *)base_addr;
   
+#if defined(RECOMPILER_DEBUG) && !defined(RECOMP_DBG)
   // Trap writes to any of the pages we compiled
   for(i=start>>12;i<=(int)((start+slen*4-4)>>12);i++) {
     g_dev.r4300.cached_interp.invalid_code[i]=0;
@@ -10898,6 +10938,7 @@ int new_recompile_block(int addr)
       //DebugMessage(M64MSG_VERBOSE, "write protect physical page: %x (virtual %x)",j<<12,start);
     }
   }
+#endif
   
   /* Pass 10 - Free memory by expiring oldest blocks */
   

@@ -29,8 +29,8 @@ struct cp1
 {
     int64_t regs[32];
 
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     uint32_t fcr0;
     uint32_t fcr31;
 
@@ -45,8 +45,8 @@ struct cp1
      * using 32-bit stores. */
     uint32_t rounding_mode;
 
-#if NEW_DYNAREC == NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifdef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     struct new_dynarec_hot_state* new_dynarec_hot_state;
 #endif
 };

@@ -69,6 +69,7 @@ static void *dyna_linker(void * src, u_int vaddr);
 static void *dyna_linker_ds(void * src, u_int vaddr);
 static void invalidate_addr(u_int addr);
 
+ALIGN(4096, static char extra_memory[33554432]);
 static u_int literals[1024][2];
 static unsigned int needs_clear_cache[1<<(TARGET_SIZE_2-17)];
 
@@ -321,8 +322,8 @@ static void *kill_pointer(void *stub)
   int **l_ptr=(void *)ptr+offset+8;
   int *i_ptr=*l_ptr;
 #else
-  int *ptr=(int *)(stub+8);
-  int *ptr2=(int *)(stub+12);
+  int *ptr=(int*)((int)stub+8);
+  int *ptr2=(int*)((int)stub+12);
   assert((*ptr&0x0ff00000)==0x03000000); //movw
   assert((*ptr2&0x0ff00000)==0x03400000); //movt
   int *i_ptr=(int*)((*ptr&0xfff)|((*ptr>>4)&0xf000)|((*ptr2&0xfff)<<16)|((*ptr2&0xf0000)<<12));
@@ -341,8 +342,8 @@ static int get_pointer(void *stub)
   int **l_ptr=(void *)ptr+offset+8;
   int *i_ptr=*l_ptr;
 #else
-  int *ptr=(int *)(stub+8);
-  int *ptr2=(int *)(stub+12);
+  int *ptr=(int *)((int)stub+8);
+  int *ptr2=(int *)((int)stub+12);
   assert((*ptr&0x0ff00000)==0x03000000); //movw
   assert((*ptr2&0x0ff00000)==0x03400000); //movt
   int *i_ptr=(int*)((*ptr&0xfff)|((*ptr>>4)&0xf000)|((*ptr2&0xfff)<<16)|((*ptr2&0xf0000)<<12));
@@ -4522,7 +4523,7 @@ static void wb_sx(signed char pre[],signed char entry[],uint64_t dirty,uint64_t 
 static void wb_valid(signed char pre[],signed char entry[],u_int dirty_pre,u_int dirty,uint64_t is32_pre,uint64_t u,uint64_t uu)
 {
   //if(dirty_pre==dirty) return;
-  int hr,reg,new_hr;
+  int hr,reg;
   for(hr=0;hr<HOST_REGS;hr++) {
     if(hr!=EXCLUDE_REG) {
       reg=pre[hr];
@@ -4664,8 +4665,8 @@ static void arch_init(void) {
   // Trampolines for jumps >32M
   int *ptr,*ptr2;
   ptr=(int *)jump_table_symbols;
-  ptr2=(int *)((void *)BASE_ADDR+(1<<TARGET_SIZE_2)-JUMP_TABLE_SIZE);
-  while((void *)ptr<(void *)jump_table_symbols+sizeof(jump_table_symbols))
+  ptr2=(int *)((int)BASE_ADDR+(1<<TARGET_SIZE_2)-JUMP_TABLE_SIZE);
+  while((int)ptr<(int)jump_table_symbols+sizeof(jump_table_symbols))
   {
     int offset=*ptr-(int)ptr2-8;
     if(offset>=-33554432&&offset<33554432) {

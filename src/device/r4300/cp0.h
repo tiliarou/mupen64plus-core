@@ -176,8 +176,8 @@ enum { CP0_INTERRUPT_HANDLERS_COUNT = 12 };
 
 struct cp0
 {
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     uint32_t regs[CP0_REGS_COUNT];
 #endif
 
@@ -186,15 +186,15 @@ struct cp0
     int interrupt_unsafe_state;
 
     struct interrupt_queue q;
-#if NEW_DYNAREC != NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifndef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     unsigned int next_interrupt;
 #endif
 
     struct interrupt_handler interrupt_handlers[CP0_INTERRUPT_HANDLERS_COUNT];
 
-#if NEW_DYNAREC == NEW_DYNAREC_ARM
-/* ARM dynarec uses a different memory layout */
+#ifdef NEW_DYNAREC
+/* New dynarec uses a different memory layout */
     struct new_dynarec_hot_state* new_dynarec_hot_state;
 #endif
 
