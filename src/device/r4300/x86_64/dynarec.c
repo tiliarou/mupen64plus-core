@@ -122,6 +122,7 @@ static void gencp0_update_count(struct r4300_core* r4300, unsigned int addr)
     mov_xreg32_m32rel(EDX, (void*)&r4300->cp0.count_per_op);
     mul_reg32(EDX);
     add_m32rel_xreg32((unsigned int*)(&r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]), EAX);
+    add_m64rel_xreg64((unsigned long long *)(r4300_cp0_next_interrupt(&r4300->cp0)), RAX);
 #else
     mov_reg64_imm64(RAX, (unsigned long long) (r4300->recomp.dst+1));
     mov_m64rel_xreg64((unsigned long long *)(&(*r4300_pc_struct(r4300))), RAX);
@@ -132,9 +133,9 @@ static void gencp0_update_count(struct r4300_core* r4300, unsigned int addr)
 
 static void gencheck_interrupt(struct r4300_core* r4300, unsigned long long instr_structure)
 {
-    mov_xreg32_m32rel(EAX, (void*)(r4300_cp0_next_interrupt(&r4300->cp0)));
-    cmp_xreg32_m32rel(EAX, (void*)&r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]);
-    ja_rj(0);
+    mov_xreg64_m64rel(RAX, (unsigned long long*)(r4300_cp0_next_interrupt(&r4300->cp0)));
+    test_reg64_reg64(RAX, RAX);
+    js_rj(0);
     jump_start_rel8(r4300);
 
     mov_reg64_imm64(RAX, (unsigned long long) instr_structure);
@@ -147,9 +148,9 @@ static void gencheck_interrupt(struct r4300_core* r4300, unsigned long long inst
 
 static void gencheck_interrupt_out(struct r4300_core* r4300, unsigned int addr)
 {
-    mov_xreg32_m32rel(EAX, (void*)(r4300_cp0_next_interrupt(&r4300->cp0)));
-    cmp_xreg32_m32rel(EAX, (void*)&r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]);
-    ja_rj(0);
+    mov_xreg64_m64rel(RAX, (unsigned long long*)(r4300_cp0_next_interrupt(&r4300->cp0)));
+    test_reg64_reg64(RAX, RAX);
+    js_rj(0);
     jump_start_rel8(r4300);
 
     mov_m32rel_imm32((unsigned int*)(&r4300->fake_instr.addr), addr);
@@ -163,9 +164,9 @@ static void gencheck_interrupt_out(struct r4300_core* r4300, unsigned int addr)
 
 static void gencheck_interrupt_reg(struct r4300_core* r4300) // addr is in EAX
 {
-    mov_xreg32_m32rel(EBX, (void*)r4300_cp0_next_interrupt(&r4300->cp0));
-    cmp_xreg32_m32rel(EBX, (void*)&r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]);
-    ja_rj(0);
+    mov_xreg64_m64rel(RBX, (unsigned long long*)(r4300_cp0_next_interrupt(&r4300->cp0)));
+    test_reg64_reg64(RBX, RBX);
+    js_rj(0);
     jump_start_rel8(r4300);
 
     mov_m32rel_xreg32((unsigned int*)(&r4300->fake_instr.addr), EAX);
@@ -2335,14 +2336,14 @@ static void gentest_idle(struct r4300_core* r4300)
     je_near_rj(0);
     jump_start_rel32(r4300);
 
-    mov_xreg32_m32rel(reg, (unsigned int *)(r4300_cp0_next_interrupt(&r4300->cp0)));
-    sub_xreg32_m32rel(reg, (unsigned int *)(&r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]));
-    cmp_reg32_imm8(reg, 3);
-    jbe_rj(0);
+    mov_xreg64_m64rel(reg, (unsigned long long *)(r4300_cp0_next_interrupt(&r4300->cp0)));
+    test_reg64_reg64(reg, reg);
+    jns_rj(0);
     jump_start_rel8(r4300);
 
-    and_reg32_imm32(reg, 0xFFFFFFFC);
-    add_m32rel_xreg32((unsigned int *)(&r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]), reg);
+    //TODO: 64bit substraction?
+    sub_m32rel_xreg32((unsigned int *)(&r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]), reg);
+    mov_m64rel_imm32((unsigned long long *)(r4300_cp0_next_interrupt(&r4300->cp0)), 0);
 
     jump_end_rel8(r4300);
     jump_end_rel32(r4300);
@@ -2491,13 +2492,13 @@ void genj_idle(struct r4300_core* r4300)
         return;
     }
 
-    mov_xreg32_m32rel(EAX, (unsigned int *)(r4300_cp0_next_interrupt(&r4300->cp0)));
-    sub_xreg32_m32rel(EAX, (unsigned int *)(&r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]));
-    cmp_reg32_imm8(EAX, 3);
-    jbe_rj(12);
+    mov_xreg64_m64rel(RAX, (unsigned long long *)(r4300_cp0_next_interrupt(&r4300->cp0)));
+    test_reg64_reg64(RAX, RAX);
+    jns_rj(18);
 
-    and_eax_imm32(0xFFFFFFFC);  // 5
-    add_m32rel_xreg32((unsigned int *)(&r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]), EAX); // 7
+    //TODO: 64bit substraction?
+    sub_m32rel_xreg32((unsigned int *)(&r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]), EAX); // 7
+    mov_m64rel_imm32((unsigned long long *)(r4300_cp0_next_interrupt(&r4300->cp0)), 0); // 11
 
     genj(r4300);
 #endif
@@ -2592,13 +2593,13 @@ void genjal_idle(struct r4300_core* r4300)
         return;
     }
 
-    mov_xreg32_m32rel(EAX, (unsigned int *)(r4300_cp0_next_interrupt(&r4300->cp0)));
-    sub_xreg32_m32rel(EAX, (unsigned int *)(&r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]));
-    cmp_reg32_imm8(EAX, 3);
-    jbe_rj(12);
+    mov_xreg64_m64rel(RAX, (unsigned long long *)(r4300_cp0_next_interrupt(&r4300->cp0)));
+    test_reg64_reg64(RAX, RAX);
+    jns_rj(18);
 
-    and_eax_imm32(0xFFFFFFFC);  // 5
-    add_m32rel_xreg32((unsigned int *)(&r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]), EAX); // 7
+    //TODO: 64bit substraction?
+    sub_m32rel_xreg32((unsigned int *)(&r4300_cp0_regs(&r4300->cp0)[CP0_COUNT_REG]), EAX); // 7
+    mov_m64rel_imm32((unsigned long long *)(r4300_cp0_next_interrupt(&r4300->cp0)), 0); // 11
 
     genjal(r4300);
 #endif

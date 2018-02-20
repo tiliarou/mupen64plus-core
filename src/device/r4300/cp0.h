@@ -166,7 +166,7 @@ struct interrupt_handler
     void (*callback)(void*);
 };
 
-enum { CP0_INTERRUPT_HANDLERS_COUNT = 12 };
+enum { CP0_INTERRUPT_HANDLERS_COUNT = 11 };
 
 struct cp0
 {
@@ -182,7 +182,7 @@ struct cp0
     struct interrupt_queue q;
 #if NEW_DYNAREC != NEW_DYNAREC_ARM
 /* ARM dynarec uses a different memory layout */
-    unsigned int next_interrupt;
+    int64_t next_interrupt;
 #endif
 
     struct interrupt_handler interrupt_handlers[CP0_INTERRUPT_HANDLERS_COUNT];
@@ -191,8 +191,6 @@ struct cp0
 /* ARM dynarec uses a different memory layout */
     struct new_dynarec_hot_state* new_dynarec_hot_state;
 #endif
-
-    int special_done;
 
     uint32_t last_addr;
     unsigned int count_per_op;
@@ -205,7 +203,7 @@ void poweron_cp0(struct cp0* cp0);
 
 uint32_t* r4300_cp0_regs(struct cp0* cp0);
 uint32_t* r4300_cp0_last_addr(struct cp0* cp0);
-unsigned int* r4300_cp0_next_interrupt(struct cp0* cp0);
+int64_t* r4300_cp0_next_interrupt(struct cp0* cp0);
 
 int check_cop1_unusable(struct r4300_core* r4300);
 

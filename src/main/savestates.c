@@ -255,7 +255,7 @@ static int savestates_load_m64p(struct device* dev, char *filepath)
     curr += 32;
 
     /* Read the rest of the savestate */
-    savestateSize = 16788244;
+    savestateSize = 16788248;
     savestateData = curr = (unsigned char *)malloc(savestateSize);
     if (savestateData == NULL)
     {
@@ -479,7 +479,7 @@ static int savestates_load_m64p(struct device* dev, char *filepath)
 
     savestates_load_set_pc(&dev->r4300, GETDATA(curr, uint32_t));
 
-    *r4300_cp0_next_interrupt(&dev->r4300.cp0) = GETDATA(curr, unsigned int);
+    *r4300_cp0_next_interrupt(&dev->r4300.cp0) = GETDATA(curr, int64_t);
     dev->vi.next_vi = GETDATA(curr, unsigned int);
     dev->vi.field = GETDATA(curr, unsigned int);
 
@@ -766,9 +766,11 @@ static int savestates_load_pj64(struct device* dev,
 
     // Initialze the interrupts
     vi_timer += cp0_regs[CP0_COUNT_REG];
-    *r4300_cp0_next_interrupt(&dev->r4300.cp0) = (cp0_regs[CP0_COMPARE_REG] < vi_timer)
-                  ? cp0_regs[CP0_COMPARE_REG]
-                  : vi_timer;
+
+    //TODO
+    //*r4300_cp0_next_interrupt(&dev->r4300.cp0) = (cp0_regs[CP0_COMPARE_REG] < vi_timer)
+    //              ? cp0_regs[CP0_COMPARE_REG]
+    //              : vi_timer;
     dev->vi.next_vi = vi_timer;
     dev->vi.field = 0;
     *((unsigned int*)&buffer[0]) = VI_INT;
@@ -1267,7 +1269,7 @@ static int savestates_save_m64p(const struct device* dev, char *filepath)
     save_eventqueue_infos(&dev->r4300.cp0, queue);
 
     // Allocate memory for the save state data
-    save->size = 16788288 + sizeof(queue) + 4 + 4096;
+    save->size = 16788292 + sizeof(queue) + 4 + 4096;
     save->data = curr = malloc(save->size);
     if (save->data == NULL)
     {
@@ -1484,7 +1486,7 @@ static int savestates_save_m64p(const struct device* dev, char *filepath)
     }
     PUTDATA(curr, uint32_t, *r4300_pc((struct r4300_core*)&dev->r4300));
 
-    PUTDATA(curr, unsigned int, *r4300_cp0_next_interrupt((struct cp0*)&dev->r4300.cp0));
+    PUTDATA(curr, int64_t, *r4300_cp0_next_interrupt((struct cp0*)&dev->r4300.cp0));
     PUTDATA(curr, unsigned int, dev->vi.next_vi);
     PUTDATA(curr, unsigned int, dev->vi.field);
 

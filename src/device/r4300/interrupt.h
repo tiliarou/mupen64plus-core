@@ -50,7 +50,6 @@ void reset_hard_handler(void* opaque);
 
 void compare_int_handler(void* opaque);
 void check_int_handler(void* opaque);
-void special_int_handler(void* opaque);
 void nmi_int_handler(void* opaque);
 
 #define VI_INT      0x001
@@ -58,11 +57,10 @@ void nmi_int_handler(void* opaque);
 #define CHECK_INT   0x004
 #define SI_INT      0x008
 #define PI_INT      0x010
-#define SPECIAL_INT 0x020
-#define AI_INT      0x040
-#define SP_INT      0x080
-#define DP_INT      0x100
-#define HW2_INT     0x200
-#define NMI_INT     0x400
+#define AI_INT      0x020
+#define SP_INT      0x040
+#define DP_INT      0x080
+#define HW2_INT     0x100
+#define NMI_INT     0x200
 
 #endif /* M64P_DEVICE_R4300_INTERRUPT_H */
